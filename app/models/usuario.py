@@ -8,23 +8,22 @@ class Usuario(db.Model):
     __tablename__ = 'usuarios'
     
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    nome = db.Column(db.String(255), nullable=False)
-    email = db.Column(db.String(255), nullable=False, unique=True)
-    senha = db.Column(db.String(255), nullable=False)
-    telefone = db.Column(db.String(20), nullable=False)
+    nome = db.Column(db.String(100), nullable=False)
+    sobrenome = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(254), nullable=False, unique=True)
+    telefone = db.Column(db.String(15), nullable=False, unique=True)
+    endereco = db.Column(db.String(254), nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-
-    def set_password(self, password):
-        self.senha = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.senha, password)
+    
+    otp_codes = db.relationship('OTPCode', backref='usuario', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
             'id': str(self.id),
             'nome': self.nome,
+            'sobrenome': self.sobrenome,
             'email': self.email,
             'telefone': self.telefone,
+            'endereco': self.endereco,
             'data_criacao': self.data_criacao.isoformat()
         }
