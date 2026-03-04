@@ -1,14 +1,15 @@
 from flask import Blueprint, request, jsonify
 from app.extensions import db
 from app.models.usuario import Usuario
-from app.utils.validators import validate_name, format_name, validate_email, validate_phone, sanitize_phone
+from app.utils.validators import validate_name, format_name, validate_email, validate_phone, sanitize_phone, validate_cpf
+import re
 
 users_bp = Blueprint('users', __name__)
 
 @users_bp.route('/users', methods=['POST'])
 def create_user():
     data = request.get_json()
-    required_fields = ("nome", "sobrenome", "email", "telefone", "endereco")
+    required_fields = ("nome", "sobrenome", "email", "telefone", "endereco", "cpf")
     
     if not data or not all(k in data for k in required_fields):
         return jsonify({"error": "Dados incompletos"}), 400
@@ -18,6 +19,7 @@ def create_user():
     email = data['email'].strip().lower()
     telefone = data['telefone'].strip()
     endereco = data['endereco'].strip()
+    cpf = data['cpf'].strip()
 
     if not validate_name(nome, 3, 50):
         return jsonify({"error": "Nome inválido. Deve ter entre 3 e 50 caracteres e conter apenas letras."}), 400
@@ -30,18 +32,26 @@ def create_user():
 
     if not validate_phone(telefone):
         return jsonify({"error": "Telefone inválido. Formato aceito: (11) 99999-9999 e sem +55."}), 400
+    
+    if not validate_cpf(cpf):
+        return jsonify({"error": "CPF inválido."}), 400
         
     telefone_clean = sanitize_phone(telefone)
+    cpf_clean = re.sub(r'\D', '', cpf)
 
-    if Usuario.query.filter_by(email=email).first() or Usuario.query.filter_by(telefone=telefone_clean).first():
-        return jsonify({"error": "Email ou Telefone já cadastrado"}), 409
+    if Usuario.query.filter_by(email=email).first() or \
+       Usuario.query.filter_by(telefone=telefone_clean).first() or \
+       Usuario.query.filter_by(cpf=cpf_clean).first():
+        return jsonify({"error": "Email, Telefone ou CPF já cadastrado"}), 409
 
     novo_usuario = Usuario(
         nome=format_name(nome),
         sobrenome=format_name(sobrenome),
         email=email,
         telefone=telefone_clean,
-        endereco=endereco
+        endereco=endereco,
+        cpf=cpf_clean,
+        etapa_registro='COMPLETED'
     )
 
     db.session.add(novo_usuario)

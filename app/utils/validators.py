@@ -43,3 +43,23 @@ def validate_email(email: str) -> bool:
         
     pattern = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     return bool(pattern.match(email))
+
+def validate_cpf(cpf: str) -> bool:
+    """
+    Valida se o CPF é válido.
+    """
+    cpf = re.sub(r'\D', '', cpf)
+
+    if len(cpf) != 11:
+        return False
+
+    if cpf == cpf[0] * 11:
+        return False
+
+    for i in range(9, 11):
+        soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
+        digito = (soma * 10 % 11) % 10
+        if digito != int(cpf[i]):
+            return False
+
+    return True
