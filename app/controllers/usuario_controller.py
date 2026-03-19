@@ -79,8 +79,11 @@ def update_user(user_id):
 
     data = request.get_json()
     
-    if 'endereco' in data:
-        usuario.endereco = data['endereco'].strip()
+    # Campos de endereço (RN-02 e RF-09 de Endereço)
+    endereco_fields = ('logradouro', 'bairro', 'cidade', 'estado', 'numero', 'sem_numero', 'complemento', 'ponto_referencia')
+    for field in endereco_fields:
+        if field in data:
+            setattr(usuario, field, data[field])
         
     if 'telefone' in data:
         telefone = data['telefone'].strip()

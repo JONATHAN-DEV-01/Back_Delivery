@@ -1,0 +1,45 @@
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
+from app.extensions import db
+
+class Restaurante(db.Model):
+    __tablename__ = 'restaurantes'
+    
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome_fantasia = db.Column(db.String(50), nullable=False)
+    razao_social = db.Column(db.String(255), nullable=False)
+    cnpj = db.Column(db.String(14), nullable=False, unique=True)
+    logotipo = db.Column(db.String(255), nullable=True) # Caminho da imagem
+    descricao = db.Column(db.String(500), nullable=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=True)
+    
+    # Endereço (RF06 Mapeamento no banco)
+    endereco = db.Column(db.String(254), nullable=False)
+    complemento = db.Column(db.String(100), nullable=True)
+    telefone = db.Column(db.String(11), nullable=False)
+    
+    # Status (RF09)
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Relacionamentos
+    horarios = db.relationship('HorarioFuncionamento', backref='restaurante', lazy=True, cascade='all, delete-orphan')
+    produtos = db.relationship('Produto', backref='restaurante', lazy=True, cascade='all, delete-orphan')
+    
+    # Proprietário (Usuário com perfil RESTAURANTE)
+    usuario_id = db.Column(UUID(as_uuid=True), db.ForeignKey('usuarios.id'), nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'nome_fantasia': self.nome_fantasia,
+            'razao_social': self.razao_social,
+            'cnpj': self.cnpj,
+            'logotipo': self.logotipo,
+            'descricao': self.descricao,
+            'categoria': self.categoria.nome if self.categoria else None,
+            'endereco': self.endereco,
+            'complemento': self.complemento,
+            'telefone': self.telefone,
+            'ativo': self.ativo,
+            'usuario_id': str(self.usuario_id)
+        }

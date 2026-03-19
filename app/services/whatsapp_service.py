@@ -3,8 +3,8 @@ from twilio.rest import Client
 
 class WhatsAppService:
     @staticmethod
-    def send_otp(telefone: str, nome: str, codigo: str) -> bool:
-        """Envia o código OTP via WhatsApp utilizando Twilio."""
+    def send_otp(telefone: str, nome: str, codigo: str = None, link: str = None) -> bool:
+        """Envia o código OTP e/ou link de acesso via WhatsApp utilizando Twilio."""
         account_sid = os.getenv('TWILIO_ACCOUNT_SID')
         auth_token = os.getenv('TWILIO_AUTH_TOKEN')
         from_number = os.getenv('TWILIO_WHATSAPP_NUMBER')
@@ -21,12 +21,13 @@ class WhatsAppService:
         else:
             to_number = telefone
 
-        body_content = f"""Olá, *{nome}*! 🍔
-
-Seu código de acesso é: *{codigo}*
-
-⏱️ Ele é válido por exatos 5 minutos.
-⚠️ Nunca compartilhe este código com ninguém."""
+        body_content = f"Olá, *{nome}*! 🍔\n\n"
+        if codigo:
+            body_content += f"Seu código de acesso é: *{codigo}*\n\n"
+        if link:
+            body_content += f"Ou acesse diretamente pelo link: {link}\n\n"
+            
+        body_content += "⏱️ Válido por exatos 5 minutos.\n⚠️ Nunca compartilhe este código."
 
         try:
             client = Client(account_sid, auth_token)

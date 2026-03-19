@@ -4,6 +4,8 @@ from flask_cors import CORS
 from app.extensions import db, migrate
 from app.controllers.usuario_controller import users_bp
 from app.controllers.auth_controller import auth_bp
+from app.controllers.restaurante_controller import restaurante_bp
+from app.controllers.produto_controller import produto_bp
 
 def create_app():
     app = Flask(__name__)
@@ -22,5 +24,12 @@ def create_app():
     # Registrar rotas (Blueprints)
     app.register_blueprint(users_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(restaurante_bp)
+    app.register_blueprint(produto_bp)
+
+    from flask import send_from_directory
+    @app.route('/uploads/<path:filename>')
+    def uploaded_file(filename):
+        return send_from_directory(os.path.join(app.root_path, '../uploads'), filename)
 
     return app
