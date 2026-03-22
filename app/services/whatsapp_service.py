@@ -1,9 +1,11 @@
 import os
-from twilio.rest import Client
+from twilio.rest import Client  # type: ignore
+
+from typing import Optional
 
 class WhatsAppService:
     @staticmethod
-    def send_otp(telefone: str, nome: str, codigo: str = None, link: str = None) -> bool:
+    def send_otp(telefone: str, nome: str, codigo: Optional[str] = None, link: Optional[str] = None) -> bool:
         """Envia o código OTP e/ou link de acesso via WhatsApp utilizando Twilio."""
         account_sid = os.getenv('TWILIO_ACCOUNT_SID')
         auth_token = os.getenv('TWILIO_AUTH_TOKEN')

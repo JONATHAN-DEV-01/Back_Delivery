@@ -10,7 +10,7 @@ produto_bp = Blueprint('produto', __name__)
 
 UPLOAD_FOLDER = 'uploads/produtos'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
-MAX_FILE_SIZE = 5 * 1024 * 1024 # 5MB (RF11)
+MAX_FILE_SIZE = 5 * 1024 * 1024 # Variável não mais usada para limite forte
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -30,12 +30,7 @@ def create_produto():
     if 'imagem' in request.files:
         file = request.files['imagem']
         if file and allowed_file(file.filename):
-            # Validação de tamanho (RF11)
-            file.seek(0, os.SEEK_END)
-            size = file.tell()
-            if size > MAX_FILE_SIZE:
-                 return jsonify({"error": "Imagem excede o tamanho máximo de 5MB."}), 400
-            file.seek(0)
+            # Validação de tamanho removida a pedido do usuário
             
             filename = secure_filename(f"p_{data['restaurante_id']}_{file.filename}")
             filepath = os.path.join(UPLOAD_FOLDER, filename)

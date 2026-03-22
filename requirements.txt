@@ -2,7 +2,7 @@ Flask==3.0.2
 Flask-SQLAlchemy==3.1.1
 Flask-Migrate==4.0.5
 Flask-Cors==4.0.0
-psycopg2-binary==2.9.9
+psycopg2-binary>=2.9.9
 Werkzeug==3.0.1
 sendgrid==6.11.0
 twilio==9.0.4

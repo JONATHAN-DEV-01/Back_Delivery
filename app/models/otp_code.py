@@ -12,7 +12,8 @@ class OTPCode(db.Model):
     data_expiracao = db.Column(db.DateTime, nullable=False)
     tentativas = db.Column(db.Integer, default=0, nullable=False)
     
-    usuario_id = db.Column(UUID(as_uuid=True), db.ForeignKey('usuarios.id'), nullable=False)
+    usuario_id = db.Column(UUID(as_uuid=True), db.ForeignKey('usuarios.id'), nullable=True) # Nulo se for restaurante
+    restaurante_id = db.Column(UUID(as_uuid=True), db.ForeignKey('restaurantes.id'), nullable=True) # Nulo se for usuário
 
     def to_dict(self):
         return {
@@ -20,5 +21,6 @@ class OTPCode(db.Model):
             'codigo': self.codigo,
             'data_expiracao': self.data_expiracao.isoformat(),
             'tentativas': self.tentativas,
-            'usuario_id': str(self.usuario_id)
+            'usuario_id': str(self.usuario_id) if self.usuario_id else None,
+            'restaurante_id': str(self.restaurante_id) if self.restaurante_id else None
         }

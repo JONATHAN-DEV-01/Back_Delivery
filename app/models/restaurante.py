@@ -25,8 +25,10 @@ class Restaurante(db.Model):
     horarios = db.relationship('HorarioFuncionamento', backref='restaurante', lazy=True, cascade='all, delete-orphan')
     produtos = db.relationship('Produto', backref='restaurante', lazy=True, cascade='all, delete-orphan')
     
-    # Proprietário (Usuário com perfil RESTAURANTE)
-    usuario_id = db.Column(UUID(as_uuid=True), db.ForeignKey('usuarios.id'), nullable=False)
+    # Autenticação e Contato Próprio
+    email = db.Column(db.String(254), nullable=False, unique=True)
+    
+    otp_codes = db.relationship('OTPCode', backref='restaurante', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
@@ -41,5 +43,5 @@ class Restaurante(db.Model):
             'complemento': self.complemento,
             'telefone': self.telefone,
             'ativo': self.ativo,
-            'usuario_id': str(self.usuario_id)
+            'email': self.email
         }

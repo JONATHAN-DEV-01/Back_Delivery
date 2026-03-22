@@ -5,13 +5,13 @@ from app.extensions import db
 from app.models.restaurante import Restaurante
 from app.models.horario_funcionamento import HorarioFuncionamento
 from app.models.categoria import Categoria
-from app.utils.validators import validate_cnpj, validate_phone
+from app.utils.validators import validate_cnpj, validate_phone, validate_email
 
 restaurante_bp = Blueprint('restaurante', __name__)
 
 UPLOAD_FOLDER = 'uploads/logos'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
-MAX_FILE_SIZE = 2 * 1024 * 1024 # 2MB
+
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -22,7 +22,7 @@ def allowed_file(filename):
 @restaurante_bp.route('/restaurantes', methods=['POST'])
 def create_restaurante():
     data = request.form.to_dict()
-    required = ('nome_fantasia', 'razao_social', 'cnpj', 'endereco', 'telefone', 'usuario_id')
+    required = ('nome_fantasia', 'razao_social', 'cnpj', 'endereco', 'telefone', 'email')
     
     if not all(k in data for k in required):
         return jsonify({"error": "Dados obrigatórios ausentes."}), 400
@@ -32,26 +32,39 @@ def create_restaurante():
     
     if not validate_phone(data['telefone']):
         return jsonify({"error": "Telefone inválido."}), 400
+        
+    if not validate_email(data['email']):
+        return jsonify({"error": "Email inválido."}), 400
 
-    # Verifica duplicidade de CNPJ
+    # Verifica duplicidades
+    orig_email = data['email'].strip().lower()
     if Restaurante.query.filter_by(cnpj=data['cnpj']).first():
         return jsonify({"error": "CNPJ já cadastrado."}), 409
+    if Restaurante.query.filter_by(email=orig_email).first():
+        return jsonify({"error": "Email já cadastrado."}), 409
 
     logotipo_path = None
     if 'logotipo' in request.files:
         file = request.files['logotipo']
         if file and allowed_file(file.filename):
-            # Validação de tamanho (RF07)
-            file.seek(0, os.SEEK_END)
-            size = file.tell()
-            if size > MAX_FILE_SIZE:
-                return jsonify({"error": "Logotipo excede o tamanho máximo de 2MB."}), 400
-            file.seek(0)
+            # Validação de tamanho removida a pedido do usuário
             
             filename = secure_filename(f"{data['cnpj']}_{file.filename}")
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             file.save(filepath)
             logotipo_path = filepath
+
+    cat_id = None
+    categoria_nome = data.get('categoria_id')
+    if categoria_nome:
+        categoria = Categoria.query.filter(Categoria.nome.ilike(categoria_nome)).first()
+        if categoria:
+            cat_id = categoria.id
+        else:
+            nova_cat = Categoria(nome=categoria_nome.title(), tipo='COZINHA')
+            db.session.add(nova_cat)
+            db.session.flush()
+            cat_id = nova_cat.id
 
     novo_restaurante = Restaurante(
         nome_fantasia=data['nome_fantasia'],
@@ -62,8 +75,8 @@ def create_restaurante():
         telefone=data['telefone'],
         descricao=data.get('descricao'),
         logotipo=logotipo_path,
-        usuario_id=data['usuario_id'],
-        categoria_id=data.get('categoria_id')
+        email=orig_email,
+        categoria_id=cat_id
     )
 
     db.session.add(novo_restaurante)

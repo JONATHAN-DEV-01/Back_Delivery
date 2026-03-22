@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app
 from app.extensions import db
 from app.models.usuario import Usuario
+from app.models.restaurante import Restaurante
 from app.models.otp_code import OTPCode
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
@@ -19,6 +20,14 @@ def generate_jwt(usuario):
         'user_id': str(usuario.id),
         'perfil': usuario.perfil,
         'exp': datetime.utcnow() + timedelta(days=7) # Persistência de sessão (RF05)
+    }
+    return jwt.encode(payload, os.getenv('JWT_SECRET', 'zupps-secret-key'), algorithm='HS256')
+
+def generate_restaurante_jwt(restaurante):
+    payload = {
+        'restaurante_id': str(restaurante.id),
+        'perfil': 'RESTAURANTE',
+        'exp': datetime.utcnow() + timedelta(days=7)
     }
     return jwt.encode(payload, os.getenv('JWT_SECRET', 'zupps-secret-key'), algorithm='HS256')
 
@@ -58,6 +67,17 @@ def generate_and_send_otp(usuario, metodo):
     else:
         # Para WhatsApp, enviamos o código e o link (flexibilidade)
         return WhatsAppService.send_otp(usuario.telefone, usuario.nome or "Usuário", codigo, link)
+
+def generate_restaurante_otp(restaurante):
+    OTPCode.query.filter_by(restaurante_id=restaurante.id).delete()
+    codigo = f"{random.randint(0, 999999):06d}"
+    data_expiracao = datetime.utcnow() + timedelta(minutes=15)
+    
+    novo_otp = OTPCode(codigo=codigo, data_expiracao=data_expiracao, restaurante_id=restaurante.id)
+    db.session.add(novo_otp)
+    db.session.commit()
+
+    return EmailService.send_otp(restaurante.email, restaurante.nome_fantasia, codigo, None)
 
 @auth_bp.route('/auth/register/start', methods=['POST'])
 def register_start():
@@ -362,3 +382,61 @@ def validate_token():
         return jsonify({"error": "Token expirado."}), 401
     except jwt.InvalidTokenError:
         return jsonify({"error": "Token inválido."}), 401
+
+@auth_bp.route('/auth/restaurant/request-otp', methods=['POST'])
+def request_restaurant_otp():
+    data = request.get_json()
+    if not data or 'email' not in data:
+        return jsonify({"error": "Informe o email cadastrado do restaurante."}), 400
+
+    email = data['email'].strip().lower()
+    restaurante = Restaurante.query.filter_by(email=email).first()
+
+    if not restaurante:
+        return jsonify({"message": "Se os dados estiverem corretos, você receberá um código em instantes."}), 200
+
+    if generate_restaurante_otp(restaurante):
+        return jsonify({"message": "Se os dados estiverem corretos, você receberá um código em instantes."}), 200
+    else:
+        return jsonify({"error": "Falha ao enviar código."}), 500
+
+@auth_bp.route('/auth/restaurant/verify-otp', methods=['POST'])
+def verify_restaurant_otp():
+    data = request.get_json()
+    if not data or 'codigo' not in data or 'email' not in data:
+        return jsonify({"error": "Informe o email e o código."}), 400
+
+    email = data['email'].strip().lower()
+    codigo_informado = data['codigo'].strip()
+
+    restaurante = Restaurante.query.filter_by(email=email).first()
+    if not restaurante:
+        return jsonify({"error": "Restaurante não encontrado."}), 404
+
+    otp = OTPCode.query.filter_by(restaurante_id=restaurante.id).order_by(OTPCode.id.desc()).first()
+    if not otp:
+        return jsonify({"error": "Nenhum código ativo encontrado para este restaurante."}), 400
+
+    if datetime.utcnow() > otp.data_expiracao:
+        db.session.delete(otp)
+        db.session.commit()
+        return jsonify({"error": "Código expirado. Solicite um novo."}), 400
+
+    if otp.codigo != codigo_informado:
+        otp.tentativas += 1
+        db.session.commit()
+        if otp.tentativas >= 4:
+            db.session.delete(otp)
+            db.session.commit()
+            return jsonify({"error": "Limite máximo de tentativas excedido. Solicite um novo código."}), 403
+        return jsonify({"error": f"Código incorreto. Você tem mais {4 - otp.tentativas} tentativas."}), 401
+
+    db.session.delete(otp)
+    db.session.commit()
+
+    token = generate_restaurante_jwt(restaurante)
+    return jsonify({
+        "message": "Login de restaurante realizado com sucesso!",
+        "token": token,
+        "restaurante": restaurante.to_dict()
+    }), 200
