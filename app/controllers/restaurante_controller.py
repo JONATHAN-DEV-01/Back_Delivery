@@ -79,10 +79,13 @@ def create_restaurante():
         categoria_id=cat_id
     )
 
-    db.session.add(novo_restaurante)
-    db.session.commit()
-
-    return jsonify(novo_restaurante.to_dict()), 201
+    try:
+        db.session.add(novo_restaurante)
+        db.session.commit()
+        return jsonify(novo_restaurante.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Erro interno ao criar restaurante: {str(e)}"}), 500
 
 @restaurante_bp.route('/restaurantes/<uuid:id>/status', methods=['PATCH'])
 def update_status(id):
@@ -114,14 +117,110 @@ def add_horario(id):
     HorarioFuncionamento.query.filter_by(restaurante_id=id).delete()
     
     from datetime import datetime
-    for h in data:
-        novo_h = HorarioFuncionamento(
-            dia_semana=h['dia_semana'],
-            abertura=datetime.strptime(h['abertura'], '%H:%M').time(),
-            fechamento=datetime.strptime(h['fechamento'], '%H:%M').time(),
-            restaurante_id=id
-        )
-        db.session.add(novo_h)
+    try:
+        for h in data:
+            novo_h = HorarioFuncionamento(
+                dia_semana=h['dia_semana'],
+                abertura=datetime.strptime(h['abertura'], '%H:%M').time(),
+                fechamento=datetime.strptime(h['fechamento'], '%H:%M').time(),
+                restaurante_id=id
+            )
+            db.session.add(novo_h)
+            
+        db.session.commit()
+        return jsonify({"message": "Horários configurados com sucesso."}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Erro ao adicionar horários: {str(e)}"}), 500
+
+@restaurante_bp.route('/restaurantes/<uuid:id>/horarios', methods=['GET'])
+def get_horarios(id):
+    restaurante = Restaurante.query.get(id)
+    if not restaurante:
+        return jsonify({"error": "Restaurante não encontrado."}), 404
         
-    db.session.commit()
-    return jsonify({"message": "Horários configurados com sucesso."}), 200
+    horarios = HorarioFuncionamento.query.filter_by(restaurante_id=id).all()
+    return jsonify([h.to_dict() for h in horarios]), 200
+
+@restaurante_bp.route('/restaurantes/<uuid:id>', methods=['PATCH'])
+def update_restaurante(id):
+    restaurante = Restaurante.query.get(id)
+    if not restaurante:
+        return jsonify({"error": "Restaurante não encontrado."}), 404
+        
+    data = request.form.to_dict()
+
+    if 'cnpj' in data and data['cnpj'] != restaurante.cnpj:
+        if not validate_cnpj(data['cnpj']):
+            return jsonify({"error": "CNPJ inválido."}), 400
+        if Restaurante.query.filter_by(cnpj=data['cnpj']).first():
+            return jsonify({"error": "CNPJ já cadastrado."}), 409
+        restaurante.cnpj = data['cnpj']
+            
+    if 'email' in data and data['email'].strip().lower() != restaurante.email:
+        orig_email = data['email'].strip().lower()
+        if not validate_email(orig_email):
+            return jsonify({"error": "Email inválido."}), 400
+        if Restaurante.query.filter_by(email=orig_email).first():
+            return jsonify({"error": "Email já cadastrado."}), 409
+        restaurante.email = orig_email
+        
+    if 'telefone' in data:
+        if not validate_phone(data['telefone']):
+            return jsonify({"error": "Telefone inválido."}), 400
+        restaurante.telefone = data['telefone']
+
+    if 'nome_fantasia' in data:
+        restaurante.nome_fantasia = data['nome_fantasia']
+    if 'razao_social' in data:
+        restaurante.razao_social = data['razao_social']
+    if 'endereco' in data:
+        restaurante.endereco = data['endereco']
+    if 'complemento' in data:
+        restaurante.complemento = data['complemento']
+    if 'descricao' in data:
+        restaurante.descricao = data['descricao']
+
+    categoria_nome = data.get('categoria_id')
+    if categoria_nome:
+        categoria = Categoria.query.filter(Categoria.nome.ilike(categoria_nome)).first()
+        if categoria:
+            restaurante.categoria_id = categoria.id
+        else:
+            nova_cat = Categoria(nome=categoria_nome.title(), tipo='COZINHA')
+            db.session.add(nova_cat)
+            db.session.flush()
+            restaurante.categoria_id = nova_cat.id
+
+    if 'logotipo' in request.files:
+        file = request.files['logotipo']
+        if file and allowed_file(file.filename):
+            filename = secure_filename(f"logo_{id}_{file.filename}")
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            restaurante.logotipo = filepath
+
+    if 'capa' in request.files:
+        file = request.files['capa']
+        if file and allowed_file(file.filename):
+            filename = secure_filename(f"capa_{id}_{file.filename}")
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            restaurante.capa = filepath
+
+    try:
+        db.session.commit()
+        return jsonify(restaurante.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Erro interno ao atualizar restaurante: {str(e)}"}), 500
+
+@restaurante_bp.route('/restaurantes', methods=['GET'])
+def list_restaurantes():
+    try:
+        # Busca apenas restaurantes ativos por padrão
+        restaurantes = Restaurante.query.filter_by(ativo=True).all()
+        return jsonify([r.to_dict() for r in restaurantes]), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao listar restaurantes: {str(e)}"}), 500
+

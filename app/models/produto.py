@@ -26,6 +26,7 @@ class Produto(db.Model):
             'preco': float(self.preco),
             'imagem': self.imagem,
             'disponivel': self.disponivel,
+            'categoria_id': self.categoria_id,
             'categoria': self.categoria.nome if self.categoria else None,
             'restaurante_id': str(self.restaurante_id),
             'grupos_adicionais': [g.to_dict() for g in self.grupos_adicionais]

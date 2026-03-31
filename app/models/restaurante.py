@@ -10,6 +10,7 @@ class Restaurante(db.Model):
     razao_social = db.Column(db.String(255), nullable=False)
     cnpj = db.Column(db.String(14), nullable=False, unique=True)
     logotipo = db.Column(db.String(255), nullable=True) # Caminho da imagem
+    capa = db.Column(db.String(255), nullable=True) # Caminho da imagem de capa
     descricao = db.Column(db.String(500), nullable=True)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=True)
     
@@ -37,6 +38,7 @@ class Restaurante(db.Model):
             'razao_social': self.razao_social,
             'cnpj': self.cnpj,
             'logotipo': self.logotipo,
+            'capa': self.capa,
             'descricao': self.descricao,
             'categoria': self.categoria.nome if self.categoria else None,
             'endereco': self.endereco,
