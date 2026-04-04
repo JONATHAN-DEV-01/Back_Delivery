@@ -14,9 +14,17 @@ class Restaurante(db.Model):
     descricao = db.Column(db.String(500), nullable=True)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=True)
     
-    # Endereço (RF06 Mapeamento no banco)
-    endereco = db.Column(db.String(254), nullable=False)
+    # Endereço detalhado (RF06 Mapeamento no banco)
+    endereco = db.Column(db.String(254), nullable=False) # Texto completo formatado
+    logradouro = db.Column(db.String(254), nullable=True)
+    bairro = db.Column(db.String(100), nullable=True)
+    cidade = db.Column(db.String(100), nullable=True)
+    estado = db.Column(db.String(2), nullable=True)
+    numero = db.Column(db.String(10), nullable=True)
+    cep = db.Column(db.String(10), nullable=True)
+    sem_numero = db.Column(db.Boolean, default=False)
     complemento = db.Column(db.String(100), nullable=True)
+    ponto_referencia = db.Column(db.String(100), nullable=True)
     telefone = db.Column(db.String(11), nullable=False)
     
     # Status (RF09)
@@ -42,7 +50,15 @@ class Restaurante(db.Model):
             'descricao': self.descricao,
             'categoria': self.categoria.nome if self.categoria else None,
             'endereco': self.endereco,
+            'logradouro': self.logradouro,
+            'bairro': self.bairro,
+            'cidade': self.cidade,
+            'estado': self.estado,
+            'numero': self.numero,
+            'cep': self.cep,
+            'sem_numero': self.sem_numero,
             'complemento': self.complemento,
+            'ponto_referencia': self.ponto_referencia,
             'telefone': self.telefone,
             'ativo': self.ativo,
             'email': self.email

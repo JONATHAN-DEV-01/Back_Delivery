@@ -70,8 +70,16 @@ def create_restaurante():
         nome_fantasia=data['nome_fantasia'],
         razao_social=data['razao_social'],
         cnpj=data['cnpj'],
-        endereco=data['endereco'],
+        endereco=data['endereco'], # Texto formatado vindo do front
+        logradouro=data.get('logradouro'),
+        bairro=data.get('bairro'),
+        cidade=data.get('cidade'),
+        estado=data.get('estado'),
+        numero=data.get('numero'),
+        cep=data.get('cep'),
+        sem_numero=data.get('sem_numero') == 'true',
         complemento=data.get('complemento'),
+        ponto_referencia=data.get('ponto_referencia'),
         telefone=data['telefone'],
         descricao=data.get('descricao'),
         logotipo=logotipo_path,
@@ -176,6 +184,22 @@ def update_restaurante(id):
         restaurante.razao_social = data['razao_social']
     if 'endereco' in data:
         restaurante.endereco = data['endereco']
+    if 'logradouro' in data:
+        restaurante.logradouro = data['logradouro']
+    if 'bairro' in data:
+        restaurante.bairro = data['bairro']
+    if 'cidade' in data:
+        restaurante.cidade = data['cidade']
+    if 'estado' in data:
+        restaurante.estado = data['estado']
+    if 'numero' in data:
+        restaurante.numero = data['numero']
+    if 'cep' in data:
+        restaurante.cep = data['cep']
+    if 'ponto_referencia' in data:
+        restaurante.ponto_referencia = data['ponto_referencia']
+    if 'sem_numero' in data:
+        restaurante.sem_numero = data['sem_numero'] == 'true'
     if 'complemento' in data:
         restaurante.complemento = data['complemento']
     if 'descricao' in data:
@@ -218,8 +242,16 @@ def update_restaurante(id):
 @restaurante_bp.route('/restaurantes', methods=['GET'])
 def list_restaurantes():
     try:
-        # Busca apenas restaurantes ativos por padrão
-        restaurantes = Restaurante.query.filter_by(ativo=True).all()
+        rest_id = request.args.get('id')
+        usuario_id = request.args.get('usuario_id') # manter compatibilidade se quiser usar
+        target_id = rest_id or usuario_id
+        
+        if target_id:
+            restaurantes = Restaurante.query.filter_by(id=target_id).all()
+        else:
+            # Busca apenas restaurantes ativos por padrão na listagem pública
+            restaurantes = Restaurante.query.filter_by(ativo=True).all()
+            
         return jsonify([r.to_dict() for r in restaurantes]), 200
     except Exception as e:
         return jsonify({"error": f"Erro ao listar restaurantes: {str(e)}"}), 500
