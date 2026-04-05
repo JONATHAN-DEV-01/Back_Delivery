@@ -25,8 +25,13 @@ class Usuario(db.Model):
     complemento = db.Column(db.String(100), nullable=True)
     ponto_referencia = db.Column(db.String(100), nullable=True)
     
+    # RF-07: URL da foto de perfil (pode ser URL do provedor social ou upload interno)
+    foto_url = db.Column(db.Text, nullable=True)
+
     etapa_registro = db.Column(db.String(50), default='EMAIL_PENDING', nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    # Atualizado em cada login bem-sucedido (social ou OTP)
+    ultimo_login = db.Column(db.DateTime, nullable=True)
     
     otp_codes = db.relationship('OTPCode', backref='usuario', lazy=True, cascade='all, delete-orphan')
 
@@ -49,6 +54,8 @@ class Usuario(db.Model):
                 'complemento': self.complemento,
                 'ponto_referencia': self.ponto_referencia
             },
+            'foto_url': self.foto_url,
             'etapa_registro': self.etapa_registro,
-            'data_criacao': self.data_criacao.isoformat()
+            'data_criacao': self.data_criacao.isoformat(),
+            'ultimo_login': self.ultimo_login.isoformat() if self.ultimo_login else None,
         }
