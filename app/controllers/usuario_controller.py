@@ -79,6 +79,18 @@ def update_user(user_id):
 
     data = request.get_json()
     
+    if 'nome' in data:
+        nome = data['nome'].strip()
+        if not validate_name(nome, 3, 50):
+            return jsonify({"error": "Nome inválido. Deve ter entre 3 e 50 caracteres e conter apenas letras."}), 400
+        usuario.nome = format_name(nome)
+
+    if 'sobrenome' in data:
+        sobrenome = data['sobrenome'].strip()
+        if not validate_name(sobrenome, 2, 50):
+            return jsonify({"error": "Sobrenome inválido. Deve ter entre 2 e 50 caracteres."}), 400
+        usuario.sobrenome = format_name(sobrenome)
+
     # Campos de endereço (RN-02 e RF-09 de Endereço)
     endereco_fields = ('logradouro', 'bairro', 'cidade', 'estado', 'numero', 'sem_numero', 'complemento', 'ponto_referencia')
     for field in endereco_fields:
