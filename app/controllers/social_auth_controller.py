@@ -146,26 +146,42 @@ def _handle_social_callback(dados_sociais: dict):
         }), 200
 
     # -------------------------------------------------------------------
-    # 2. Verifica se o e-mail já existe na tabela usuarios
+    # 2. Verifica se o e-mail já existe na tabela usuarios (qualquer etapa)
     # -------------------------------------------------------------------
     usuario_existente: Optional[Usuario] = Usuario.query.filter_by(email=email).first()
 
-    if usuario_existente and usuario_existente.etapa_registro == "COMPLETED":
-        # RF-06: E-mail já cadastrado → vincula o provedor e retorna JWT
-        novo_vinculo = IdentidadeSocial(
-            usuario_id=usuario_existente.id,
-            provedor=provedor,
-            id_provedor=id_provedor,
-        )
+    if usuario_existente:
+        # RF-06: E-mail já cadastrado em qualquer etapa — vincula e faz login
+        # Verifica se o vínculo para este provedor já existe antes de criar
+        vinculo_ja_existe = IdentidadeSocial.query.filter_by(
+            provedor=provedor, id_provedor=id_provedor
+        ).first()
+
+        if not vinculo_ja_existe:
+            novo_vinculo = IdentidadeSocial(
+                usuario_id=usuario_existente.id,
+                provedor=provedor,
+                id_provedor=id_provedor,
+            )
+            db.session.add(novo_vinculo)
+
         # Atualiza foto se o usuário ainda não tiver uma
         if not usuario_existente.foto_url and dados_sociais.get("foto_url"):
             usuario_existente.foto_url = dados_sociais["foto_url"]
 
-        db.session.add(novo_vinculo)
-        db.session.commit()
+        # Garante que a conta fica marcada como completa ao vincular social
+        if usuario_existente.etapa_registro != "COMPLETED":
+            usuario_existente.etapa_registro = "COMPLETED"
+
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            logger.error("[SocialAuth] Erro ao vincular conta existente: %s", exc)
+            return jsonify({"error": "Erro ao vincular conta. Tente novamente."}), 500
 
         logger.info(
-            "[SocialAuth] Vínculo criado para usuário existente: user_id=%s, provedor=%s",
+            "[SocialAuth] Login via social para usuário existente: user_id=%s, provedor=%s",
             usuario_existente.id, provedor,
         )
         return jsonify({
@@ -337,10 +353,49 @@ def complete_social_registration():
     nome_completo: str = payload.get("nome_completo", "")
     foto_url: str = payload.get("foto_url", "")
 
-    if Usuario.query.filter_by(email=email).first():
+    # ------------------------------------------------------------------
+    # 3a. Race condition: o e-mail pode ter sido cadastrado enquanto o
+    #     token provisório estava ativo (ou o usuário já tinha conta via OTP).
+    #     Neste caso fazemos login/vinculação em vez de retornar 409.
+    # ------------------------------------------------------------------
+    usuario_existente: Optional[Usuario] = Usuario.query.filter_by(email=email).first()
+
+    if usuario_existente:
+        # Verifica se o vínculo social para este provedor já existe
+        vinculo_existente = IdentidadeSocial.query.filter_by(
+            provedor=provedor, id_provedor=id_provedor
+        ).first()
+
+        if not vinculo_existente:
+            novo_vinculo = IdentidadeSocial(
+                usuario_id=usuario_existente.id,
+                provedor=provedor,
+                id_provedor=id_provedor,
+            )
+            db.session.add(novo_vinculo)
+
+        if not usuario_existente.foto_url and foto_url:
+            usuario_existente.foto_url = foto_url
+
+        if usuario_existente.etapa_registro != "COMPLETED":
+            usuario_existente.etapa_registro = "COMPLETED"
+
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            logger.error("[SocialAuth] Erro ao vincular conta existente em complete-registration: %s", exc)
+            return jsonify({"error": "Erro ao vincular conta. Tente novamente."}), 500
+
+        logger.info(
+            "[SocialAuth] complete-registration: conta existente vinculada. user_id=%s",
+            usuario_existente.id,
+        )
         return jsonify({
-            "error": "Este e-mail já está cadastrado. Use a opção de login."
-        }), 409
+            "message": "Conta vinculada e login realizado com sucesso!",
+            "token": _generate_jwt(usuario_existente),
+            "user": usuario_existente.to_dict(),
+        }), 200
 
     if Usuario.query.filter_by(telefone=telefone_clean).first():
         return jsonify({"error": "Este telefone já está cadastrado."}), 409
