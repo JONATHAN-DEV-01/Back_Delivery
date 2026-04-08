@@ -136,22 +136,17 @@ def buscar_produtos():
         if restaurante:
             p['restaurante'] = {
                 'id':                    str(restaurante.id),
-                'nome':                  restaurante.nome,
-                'nota_avaliacao':        getattr(restaurante, 'nota_avaliacao', None),
-                'tempo_entrega_minutos': getattr(restaurante, 'tempo_entrega_minutos', None),
-                'valor_frete':           float(getattr(restaurante, 'valor_frete', 0) or 0),
+                'nome':                  restaurante.nome_fantasia,           # fix: era .nome
+                'is_open':               restaurante.is_open,
+                'nota_avaliacao':        float(restaurante.nota_avaliacao)        if restaurante.nota_avaliacao        else None,
+                'tempo_entrega_minutos': restaurante.tempo_entrega_minutos,
+                'valor_frete':           float(restaurante.valor_frete)           if restaurante.valor_frete           else None,
             }
         else:
             p['restaurante'] = None
 
-        # RF-05: preço promocional
-        preco_promocional = getattr(produto, 'preco_promocional', None)
-        if preco_promocional and float(preco_promocional) > 0:
-            p['preco_original']     = float(produto.preco)
-            p['preco_promocional']  = float(preco_promocional)
-            p['em_promocao']        = True
-        else:
-            p['em_promocao'] = False
+        # RF-05: preco_promocional já serializado pelo to_dict() do modelo Produto
+        # (preco_original, preco_promocional e em_promocao já estão em `p`)
 
         produtos_json.append(p)
 
@@ -169,10 +164,10 @@ def buscar_produtos():
             .all()
         )
 
-        # 7b. Lojas abertas próximas (is_open = true quando disponível no model)
+        # 7b. Lojas abertas próximas — usa o campo is_open real (RF-02 / RN-03)
         lojas_abertas = (
             db.session.query(Restaurante)
-            .filter(getattr(Restaurante, 'is_open', True) == True)  # noqa: E712
+            .filter(Restaurante.ativo == True, Restaurante.is_open == True)  # noqa: E712
             .limit(5)
             .all()
         )
