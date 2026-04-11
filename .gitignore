@@ -2,4 +2,10 @@ venv/
 .env
 __pycache__/
 *.pyc
-migrations/
+
+# Ignorar arquivos temporários, de ambiente e uploads locais
+uploads/
+app.log
+pip_error.log
+logs.txt
+.vscode/

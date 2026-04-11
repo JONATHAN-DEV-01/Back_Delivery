@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
+from app.services.supabase_storage import upload_file_to_supabase
 from app.models.produto import Produto
 from app.models.adicional import GrupoAdicionais, Adicional
 
@@ -67,10 +68,11 @@ def create_produto():
         if 'imagem' in request.files:
             file = request.files['imagem']
             if file and allowed_file(file.filename):
+                # O filename customizado com UUID para evitar colisão pode ser feito setando o nome do arquivo,
+                # e o upload_file_to_supabase vai utilizar o secure_filename nele
                 ext = file.filename.rsplit('.', 1)[1].lower()
-                imagem_filename = f"{uuid.uuid4().hex[:12]}.{ext}"
-                filepath = os.path.join(UPLOAD_FOLDER, imagem_filename)
-                file.save(filepath)
+                file.filename = f"{uuid.uuid4().hex[:12]}.{ext}"
+                imagem_filename = upload_file_to_supabase(file, folder='produtos')
 
         # Lidar com categoria enviada como string ou ID
         cat_id = None
@@ -150,9 +152,9 @@ def update_produto(id):
         if 'imagem' in request.files:
             file = request.files['imagem']
             if file and allowed_file(file.filename):
-                # Deleta a imagem antiga se existir
+                # Deleta a imagem antiga se existir (logic mantida para pasta antiga, supabase deletar requer api extra)
                 if produto.imagem:
-                    old_path = os.path.join(UPLOAD_FOLDER, produto.imagem)
+                    old_path = os.path.join(UPLOAD_FOLDER, getattr(produto, 'imagem', ''))
                     if os.path.exists(old_path):
                         try:
                             os.remove(old_path)
@@ -160,10 +162,11 @@ def update_produto(id):
                             pass
                 
                 ext = file.filename.rsplit('.', 1)[1].lower()
-                imagem_filename = f"{uuid.uuid4().hex[:12]}.{ext}"
-                filepath = os.path.join(UPLOAD_FOLDER, imagem_filename)
-                file.save(filepath)
-                produto.imagem = imagem_filename
+                file.filename = f"{uuid.uuid4().hex[:12]}.{ext}"
+                
+                novo_url = upload_file_to_supabase(file, folder='produtos')
+                if novo_url:
+                    produto.imagem = novo_url
 
         db.session.commit()
         return jsonify({"message": "Produto atualizado com sucesso", "produto": produto.to_dict()}), 200

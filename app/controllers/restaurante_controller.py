@@ -6,6 +6,7 @@ from app.models.restaurante import Restaurante
 from app.models.horario_funcionamento import HorarioFuncionamento
 from app.models.categoria import Categoria
 from app.utils.validators import validate_cnpj, validate_phone, validate_email
+from app.services.supabase_storage import upload_file_to_supabase
 
 restaurante_bp = Blueprint('restaurante', __name__)
 
@@ -47,12 +48,7 @@ def create_restaurante():
     if 'logotipo' in request.files:
         file = request.files['logotipo']
         if file and allowed_file(file.filename):
-            # Validação de tamanho removida a pedido do usuário
-            
-            filename = secure_filename(f"{data['cnpj']}_{file.filename}")
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            logotipo_path = filepath
+            logotipo_path = upload_file_to_supabase(file, folder='logos')
 
     cat_id = None
     categoria_nome = data.get('categoria_id')
@@ -219,18 +215,12 @@ def update_restaurante(id):
     if 'logotipo' in request.files:
         file = request.files['logotipo']
         if file and allowed_file(file.filename):
-            filename = secure_filename(f"logo_{id}_{file.filename}")
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            restaurante.logotipo = filepath
+            restaurante.logotipo = upload_file_to_supabase(file, folder='logos')
 
     if 'capa' in request.files:
         file = request.files['capa']
         if file and allowed_file(file.filename):
-            filename = secure_filename(f"capa_{id}_{file.filename}")
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            restaurante.capa = filepath
+            restaurante.capa = upload_file_to_supabase(file, folder='logos')
 
     try:
         db.session.commit()
