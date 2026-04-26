@@ -294,4 +294,5 @@ def status_pagamento(pedido_id):
     }), 200
 
 
-
+    # Endpoint para testes de integração ao mercado pago devem ser colocados aqui ao final das rotas oficiais.
+    
