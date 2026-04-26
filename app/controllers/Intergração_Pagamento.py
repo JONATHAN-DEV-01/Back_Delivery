@@ -1,5 +1,6 @@
 import os
 import requests
+import uuid
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, g
 from app.extensions import db
@@ -12,12 +13,15 @@ from app.utils.auth_utils import require_auth
 
 pagamento_bp = Blueprint('pagamento', __name__)
 
-MP_ACCESS_TOKEN = "APP_USR-2567384611359539-042613-cbd559f2a526aa8673f5930abf9695d2-3361553472"
+MP_ACCESS_TOKEN = "TEST-94413540544618-042615-43a35b126f756bdddb3dec2355edf6db-1740413380"
 MP_URL = "https://api.mercadopago.com/v1"
-HEADERS = {
-    "Authorization": f"Bearer {MP_ACCESS_TOKEN}",
-    "Content-Type": "application/json"
-}
+
+def get_mp_headers():
+    return {
+        "Authorization": f"Bearer {MP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": str(uuid.uuid4())
+    }
 
 @pagamento_bp.route('/pagamentos/cartao', methods=['POST'])
 @require_auth
@@ -61,19 +65,19 @@ def pagar_cartao():
 
     # Implementar tokenização e criação de Customer para armazenamento seguro
     if save_card or data.get('mp_card_id'):
-        res_cust = requests.get(f"{MP_URL}/customers/search?email={email}", headers=HEADERS)
+        res_cust = requests.get(f"{MP_URL}/customers/search?email={email}", headers=get_mp_headers())
         cust_results = res_cust.json().get('results', [])
         
         if cust_results:
             customer_id = cust_results[0]['id']
         else:
-            res_create = requests.post(f"{MP_URL}/customers", json={"email": email}, headers=HEADERS)
+            res_create = requests.post(f"{MP_URL}/customers", json={"email": email}, headers=get_mp_headers())
             if res_create.status_code in [200, 201]:
                 customer_id = res_create.json().get('id')
 
         if save_card and customer_id and not data.get('mp_card_id'):
             # Salvar o cartão vinculando o token ao customer
-            res_card = requests.post(f"{MP_URL}/customers/{customer_id}/cards", json={"token": token}, headers=HEADERS)
+            res_card = requests.post(f"{MP_URL}/customers/{customer_id}/cards", json={"token": token}, headers=get_mp_headers())
             if res_card.status_code in [200, 201]:
                 card_data = res_card.json()
                 mp_card_id = card_data.get('id')
@@ -110,7 +114,7 @@ def pagar_cartao():
     if issuer_id:
         payload["issuer_id"] = issuer_id
 
-    res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=HEADERS)
+    res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=get_mp_headers())
     pay_data = res_pay.json()
 
     if res_pay.status_code not in [200, 201]:
@@ -185,7 +189,7 @@ def pagar_pix():
         "date_of_expiration": (datetime.utcnow() + timedelta(minutes=30)).isoformat() + "Z"
     }
 
-    res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=HEADERS)
+    res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=get_mp_headers())
     pay_data = res_pay.json()
 
     if res_pay.status_code not in [200, 201]:
@@ -236,7 +240,7 @@ def webhook_mp():
         return jsonify({'status': 'ignored'}), 200
 
     # Busca status atualizado do pagamento na API
-    res = requests.get(f"{MP_URL}/payments/{data_id}", headers=HEADERS)
+    res = requests.get(f"{MP_URL}/payments/{data_id}", headers=get_mp_headers())
     if res.status_code == 200:
         pay_data = res.json()
         mp_status = pay_data.get('status')
@@ -287,5 +291,39 @@ def status_pagamento(pedido_id):
         'metodo': pagamento.metodo,
         'status': pagamento.status,
         'status_pedido': pedido.status
+    }), 200
+
+@pagamento_bp.route('/pagamentos/teste-pix', methods=['POST'])
+def teste_pix_direto():
+    """ Rota temporária e simples para testar a integração do Pix no Postman sem precisar de login ou pedido no banco """
+    payload = {
+        "transaction_amount": 1.50, # R$ 1,50
+        "payment_method_id": "pix",
+        "description": "Teste rápido de integração",
+        "payer": {
+            "email": "teste.postman@zupps.com",
+            "first_name": "Teste",
+            "last_name": "Postman",
+            "identification": {
+                "type": "CPF",
+                "number": "19119119100"
+            }
+        }
+    }
+
+    res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=get_mp_headers())
+    pay_data = res_pay.json()
+
+    if res_pay.status_code not in [200, 201]:
+        return jsonify({'error': 'Erro ao gerar Pix no Mercado Pago', 'details': pay_data}), 400
+
+    poi = pay_data.get('point_of_interaction', {}).get('transaction_data', {})
+    
+    return jsonify({
+        'message': 'Integração com Mercado Pago funcionando!',
+        'status_api': pay_data.get('status'),
+        'mercado_pago_id': pay_data.get('id'),
+        'pix_copia_cola': poi.get('qr_code'),
+        'pix_qr_code_base64': poi.get('qr_code_base64')
     }), 200
 
