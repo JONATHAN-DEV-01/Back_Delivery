@@ -9,6 +9,7 @@ from app.controllers.produto_controller import produto_bp
 from app.controllers.social_auth_controller import social_auth_bp
 from app.controllers.buscar_controller import busca_bp
 from app.controllers.categoria_controller import categoria_bp
+from app.controllers.carrinho_controller import carrinho_bp
 
 def create_app():
     app = Flask(__name__)
@@ -32,11 +33,14 @@ def create_app():
     app.register_blueprint(social_auth_bp)
     app.register_blueprint(busca_bp)
     app.register_blueprint(categoria_bp)
+    app.register_blueprint(carrinho_bp)
 
 
     # Importar modelos para que o Alembic/Flask-Migrate os detecte
     from app.models import identidade_social  # noqa: F401
     from app.models import loja_categoria     # noqa: F401
+    from app.models import carrinho           # noqa: F401
+    from app.models import cupom              # noqa: F401
 
     from flask import send_from_directory
     @app.route('/uploads/<path:filename>')

@@ -42,6 +42,7 @@ class Restaurante(db.Model):
     nota_avaliacao        = db.Column(db.Numeric(3, 2), nullable=True)
     tempo_entrega_minutos = db.Column(db.Integer, nullable=True)
     valor_frete           = db.Column(db.Numeric(10, 2), nullable=True)
+    pedido_minimo_centavos = db.Column(db.Integer, nullable=False, default=0)
 
     # Autenticação
     email = db.Column(db.String(254), nullable=False, unique=True)
@@ -96,5 +97,6 @@ class Restaurante(db.Model):
             'nota_avaliacao':        float(self.nota_avaliacao)        if self.nota_avaliacao        else None,
             'tempo_entrega_minutos': self.tempo_entrega_minutos,
             'valor_frete':           float(self.valor_frete)           if self.valor_frete           else None,
+            'pedido_minimo_centavos': self.pedido_minimo_centavos,
             'email':                 self.email,
         }
