@@ -34,13 +34,16 @@ def create_app():
     app.register_blueprint(busca_bp)
     app.register_blueprint(categoria_bp)
     app.register_blueprint(carrinho_bp)
-
+    
+    from app.controllers.pedido_controller import pedido_bp
+    app.register_blueprint(pedido_bp)
 
     # Importar modelos para que o Alembic/Flask-Migrate os detecte
     from app.models import identidade_social  # noqa: F401
     from app.models import loja_categoria     # noqa: F401
     from app.models import carrinho           # noqa: F401
     from app.models import cupom              # noqa: F401
+    from app.models import pedido             # noqa: F401
 
     from flask import send_from_directory
     @app.route('/uploads/<path:filename>')
