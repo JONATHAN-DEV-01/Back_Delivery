@@ -12,7 +12,7 @@ from app.utils.auth_utils import require_auth
 
 pagamento_bp = Blueprint('pagamento', __name__)
 
-MP_ACCESS_TOKEN = "APP_USR-6929075e-96f0-46b4-a61f-382538a96661"
+MP_ACCESS_TOKEN = "APP_USR-2567384611359539-042613-cbd559f2a526aa8673f5930abf9695d2-3361553472"
 MP_URL = "https://api.mercadopago.com/v1"
 HEADERS = {
     "Authorization": f"Bearer {MP_ACCESS_TOKEN}",
