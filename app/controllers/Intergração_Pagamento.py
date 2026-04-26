@@ -293,37 +293,5 @@ def status_pagamento(pedido_id):
         'status_pedido': pedido.status
     }), 200
 
-@pagamento_bp.route('/pagamentos/teste-pix', methods=['POST'])
-def teste_pix_direto():
-    """ Rota temporária e simples para testar a integração do Pix no Postman sem precisar de login ou pedido no banco """
-    payload = {
-        "transaction_amount": 1.50, # R$ 1,50
-        "payment_method_id": "pix",
-        "description": "Teste rápido de integração",
-        "payer": {
-            "email": "teste.postman@zupps.com",
-            "first_name": "Teste",
-            "last_name": "Postman",
-            "identification": {
-                "type": "CPF",
-                "number": "19119119100"
-            }
-        }
-    }
 
-    res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=get_mp_headers())
-    pay_data = res_pay.json()
-
-    if res_pay.status_code not in [200, 201]:
-        return jsonify({'error': 'Erro ao gerar Pix no Mercado Pago', 'details': pay_data}), 400
-
-    poi = pay_data.get('point_of_interaction', {}).get('transaction_data', {})
-    
-    return jsonify({
-        'message': 'Integração com Mercado Pago funcionando!',
-        'status_api': pay_data.get('status'),
-        'mercado_pago_id': pay_data.get('id'),
-        'pix_copia_cola': poi.get('qr_code'),
-        'pix_qr_code_base64': poi.get('qr_code_base64')
-    }), 200
 
