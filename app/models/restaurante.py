@@ -60,24 +60,31 @@ class Restaurante(db.Model):
         if not self.ativo:
             return False
             
-        from datetime import datetime
+        from datetime import datetime, time as dtime
         import pytz
         
         try:
             tz = pytz.timezone('America/Sao_Paulo')
             now = datetime.now(tz)
-        except:
-            now = datetime.utcnow()
+        except Exception:
+            return True  # Se pytz falhar, assumir aberto
             
         current_day = (now.weekday() + 1) % 7
-        current_time = now.time()
+        current_time = now.time().replace(second=0, microsecond=0)
         
         if not self.horarios:
-            return True # Assumir aberto se não houver restrição configurada, mas for ativo
+            return True  # Sem horário configurado = sempre aberto (se ativo)
             
         for h in self.horarios:
             if h.dia_semana == current_day:
-                if h.abertura <= current_time <= h.fechamento:
+                abertura = h.abertura
+                fechamento = h.fechamento
+                
+                # 00:00:00 como fechamento = meia-noite = fim do dia
+                if fechamento == dtime(0, 0, 0):
+                    fechamento = dtime(23, 59, 59)
+                
+                if abertura <= current_time <= fechamento:
                     return True
         return False
 
