@@ -61,7 +61,7 @@ class Carrinho(db.Model):
                 'id':                    str(self.restaurante.id),
                 'nome_fantasia':         self.restaurante.nome_fantasia,
                 'logotipo':              self.restaurante.logotipo,
-                'is_open':               self.restaurante.is_open,
+                'is_open':               self.restaurante.is_open_agora,
                 'pedido_minimo_centavos': pedido_minimo,
                 'valor_frete_centavos':  frete,
             },

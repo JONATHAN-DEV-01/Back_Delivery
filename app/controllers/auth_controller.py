@@ -393,10 +393,10 @@ def request_restaurant_otp():
     restaurante = Restaurante.query.filter_by(email=email).first()
 
     if not restaurante:
-        return jsonify({"message": "Se os dados estiverem corretos, você receberá um código em instantes."}), 200
+        return jsonify({"error": "Restaurante não encontrado. Verifique o email ou cadastre-se."}), 404
 
     if generate_restaurante_otp(restaurante):
-        return jsonify({"message": "Se os dados estiverem corretos, você receberá um código em instantes."}), 200
+        return jsonify({"message": "Código enviado para o seu email."}), 200
     else:
         return jsonify({"error": "Falha ao enviar código."}), 500
 

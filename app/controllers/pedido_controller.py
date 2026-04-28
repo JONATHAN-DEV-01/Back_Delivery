@@ -30,7 +30,7 @@ def create_pedido():
     if not restaurante:
         return jsonify({'error': 'Restaurante não encontrado'}), 404
     
-    if not restaurante.is_open:
+    if not restaurante.is_open_agora:
         return jsonify({'error': 'O restaurante está fechado no momento.'}), 400
 
     # 2. Carregar Usuário e Endereço

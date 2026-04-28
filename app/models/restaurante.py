@@ -55,6 +55,32 @@ class Restaurante(db.Model):
     # Relacionamento N:N com Categoria via loja_categorias (Req. 7.4)
     categorias = db.relationship('Categoria', secondary=loja_categorias, lazy=True)
 
+    @property
+    def is_open_agora(self):
+        if not self.ativo:
+            return False
+            
+        from datetime import datetime
+        import pytz
+        
+        try:
+            tz = pytz.timezone('America/Sao_Paulo')
+            now = datetime.now(tz)
+        except:
+            now = datetime.utcnow()
+            
+        current_day = (now.weekday() + 1) % 7
+        current_time = now.time()
+        
+        if not self.horarios:
+            return True # Assumir aberto se não houver restrição configurada, mas for ativo
+            
+        for h in self.horarios:
+            if h.dia_semana == current_day:
+                if h.abertura <= current_time <= h.fechamento:
+                    return True
+        return False
+
     def distancia_km(self, user_lat: float, user_lon: float) -> float | None:
         """Calcula distância em km usando Haversine."""
         if self.latitude is None or self.longitude is None:
@@ -93,7 +119,7 @@ class Restaurante(db.Model):
             'latitude':              float(self.latitude)  if self.latitude  else None,
             'longitude':             float(self.longitude) if self.longitude else None,
             'ativo':                 self.ativo,
-            'is_open':               self.is_open,
+            'is_open':               self.is_open_agora,
             'nota_avaliacao':        float(self.nota_avaliacao)        if self.nota_avaliacao        else None,
             'tempo_entrega_minutos': self.tempo_entrega_minutos,
             'valor_frete':           float(self.valor_frete)           if self.valor_frete           else None,

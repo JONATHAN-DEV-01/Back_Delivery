@@ -303,7 +303,7 @@ def congelar_carrinho():
         return jsonify({'error': 'Carrinho vazio.'}), 422
 
     restaurante = carrinho.restaurante
-    if not restaurante.is_open:
+    if not restaurante.is_open_agora:
         return jsonify({
             'error': 'O restaurante fechou. Não é possível continuar com o pedido.'
         }), 409

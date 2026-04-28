@@ -52,7 +52,7 @@ def pagar_cartao():
 
     # RN: Verificar se o restaurante está aberto
     restaurante = Restaurante.query.get(pedido.restaurante_id)
-    if not restaurante.is_open:
+    if not restaurante.is_open_agora:
         return jsonify({'error': 'O restaurante está fechado no momento.'}), 400
 
     # RN: Verificar alteração de preço
@@ -165,7 +165,7 @@ def pagar_pix():
 
     # RN: Verificar se o restaurante está aberto
     restaurante = Restaurante.query.get(pedido.restaurante_id)
-    if not restaurante.is_open:
+    if not restaurante.is_open_agora:
         return jsonify({'error': 'O restaurante está fechado no momento.'}), 400
 
     # RN: Verificar alteração de preço

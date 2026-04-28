@@ -137,7 +137,7 @@ def buscar_produtos():
             p['restaurante'] = {
                 'id':                    str(restaurante.id),
                 'nome':                  restaurante.nome_fantasia,           # fix: era .nome
-                'is_open':               restaurante.is_open,
+                'is_open':               restaurante.is_open_agora,
                 'nota_avaliacao':        float(restaurante.nota_avaliacao)        if restaurante.nota_avaliacao        else None,
                 'tempo_entrega_minutos': restaurante.tempo_entrega_minutos,
                 'valor_frete':           float(restaurante.valor_frete)           if restaurante.valor_frete           else None,
@@ -164,13 +164,18 @@ def buscar_produtos():
             .all()
         )
 
-        # 7b. Lojas abertas próximas — usa o campo is_open real (RF-02 / RN-03)
-        lojas_abertas = (
+        # 7b. Lojas abertas próximas — usa o campo is_open_agora
+        lojas_ativas = (
             db.session.query(Restaurante)
-            .filter(Restaurante.ativo == True, Restaurante.is_open == True)  # noqa: E712
-            .limit(5)
+            .filter(Restaurante.ativo == True)  # noqa: E712
             .all()
         )
+        lojas_abertas = []
+        for r in lojas_ativas:
+            if r.is_open_agora:
+                lojas_abertas.append(r)
+            if len(lojas_abertas) == 5:
+                break
 
         fallback = {
             "sugestoes_categorias": [c.to_dict() for c, _ in top_cats],
