@@ -1,4 +1,5 @@
 import os
+import pytz
 import requests
 import uuid
 from datetime import datetime, timedelta
@@ -174,24 +175,35 @@ def pagar_pix():
 
     usuario = Usuario.query.get(g.usuario_id)
     transaction_amount = float(pedido.total_centavos) / 100.0
-    
-    # CPF de teste para Mercado Pago sandbox (aceito em ambiente de testes)
-    cpf_usuario = getattr(usuario, 'cpf', None) or '19119119100'
+
+    # CPF vem do payload (modal frontend) ou fallback do cadastro do usuário
+    cpf_payer = payer.get('identification', {}).get('number', '')
+    if not cpf_payer:
+        cpf_payer = getattr(usuario, 'cpf', None) or ''
+    cpf_payer = cpf_payer.replace('.', '').replace('-', '').strip()
+
+    # Email real do usuário cadastrado
+    email_payer = payer.get('email') or usuario.email or 'pagador@zuppseats.com'
+
+    # MP exige formato: yyyy-MM-dd'T'HH:mm:ss.SSS-HH:mm (com milissegundos e offset)
+    expiracao = (
+        datetime.now(pytz.timezone('America/Sao_Paulo')) + timedelta(minutes=30)
+    ).strftime('%Y-%m-%dT%H:%M:%S.000-03:00')
 
     payload = {
         "transaction_amount": transaction_amount,
         "payment_method_id": "pix",
         "description": f"Pedido {pedido.id}",
         "payer": {
-            "email": payer.get('email', usuario.email),
-            "first_name": payer.get('first_name', usuario.nome or 'Cliente'),
-            "last_name": payer.get('last_name', usuario.sobrenome or 'Zupps'),
+            "email": email_payer,
+            "first_name": payer.get('first_name') or (usuario.nome or 'Cliente'),
+            "last_name": payer.get('last_name') or (usuario.sobrenome or 'Zupps'),
             "identification": {
                 "type": "CPF",
-                "number": cpf_usuario.replace('.','').replace('-','')
+                "number": cpf_payer
             }
         },
-        "date_of_expiration": (datetime.utcnow() + timedelta(minutes=30)).isoformat() + "Z"
+        "date_of_expiration": expiracao
     }
 
     res_pay = requests.post(f"{MP_URL}/payments", json=payload, headers=get_mp_headers())
