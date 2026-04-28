@@ -174,6 +174,9 @@ def pagar_pix():
 
     usuario = Usuario.query.get(g.usuario_id)
     transaction_amount = float(pedido.total_centavos) / 100.0
+    
+    # CPF de teste para Mercado Pago sandbox (aceito em ambiente de testes)
+    cpf_usuario = getattr(usuario, 'cpf', None) or '19119119100'
 
     payload = {
         "transaction_amount": transaction_amount,
@@ -181,11 +184,13 @@ def pagar_pix():
         "description": f"Pedido {pedido.id}",
         "payer": {
             "email": payer.get('email', usuario.email),
-            "first_name": payer.get('first_name', usuario.nome),
-            "last_name": payer.get('last_name', usuario.sobrenome),
-            "identification": payer.get('identification', {})
+            "first_name": payer.get('first_name', usuario.nome or 'Cliente'),
+            "last_name": payer.get('last_name', usuario.sobrenome or 'Zupps'),
+            "identification": {
+                "type": "CPF",
+                "number": cpf_usuario.replace('.','').replace('-','')
+            }
         },
-        # Configurar tempo de expiração de 30 minutos
         "date_of_expiration": (datetime.utcnow() + timedelta(minutes=30)).isoformat() + "Z"
     }
 
@@ -193,7 +198,7 @@ def pagar_pix():
     pay_data = res_pay.json()
 
     if res_pay.status_code not in [200, 201]:
-        return jsonify({'error': 'Erro ao gerar Pix', 'details': pay_data}), 400
+        return jsonify({'error': 'Erro ao gerar Pix', 'details': pay_data, 'mp_status': res_pay.status_code}), 400
 
     poi = pay_data.get('point_of_interaction', {}).get('transaction_data', {})
     qr_code = poi.get('qr_code')
