@@ -99,12 +99,21 @@ def pagar_cartao():
     # Conversão de centavos para decimal exigida pela API
     transaction_amount = float(pedido.total_centavos) / 100.0
 
+    # Map frontend payment method ids to Mercado Pago official IDs
+    pm_id = payment_method_id.lower().strip()
+    if pm_id == 'mastercard':
+        pm_id = 'master'
+    elif pm_id == 'american express':
+        pm_id = 'amex'
+    elif pm_id == 'diners club':
+        pm_id = 'diners'
+
     payload = {
         "transaction_amount": transaction_amount,
         "token": token,
         "description": f"Pedido {pedido.id}",
         "installments": installments,
-        "payment_method_id": payment_method_id,
+        "payment_method_id": pm_id,
         "payer": payer
     }
 
