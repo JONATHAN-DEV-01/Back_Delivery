@@ -70,7 +70,7 @@ if __name__ == "__main__":
                     atualizados += 1
 
             if rest.capa and 'supabase.co' not in rest.capa:
-                novo_url = migrar_arquivo(rest.capa, 'logos')
+                novo_url = migrar_arquivo(rest.capa, 'capas')
                 if novo_url:
                     rest.capa = novo_url
                     atualizados += 1

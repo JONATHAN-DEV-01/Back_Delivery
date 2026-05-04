@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
-from app.services.supabase_storage import upload_file_to_supabase
+from app.services.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
 from app.models.produto import Produto
 from app.models.adicional import GrupoAdicionais, Adicional
 
@@ -152,18 +152,13 @@ def update_produto(id):
         if 'imagem' in request.files:
             file = request.files['imagem']
             if file and allowed_file(file.filename):
-                # Deleta a imagem antiga se existir (logic mantida para pasta antiga, supabase deletar requer api extra)
+                # Remove a imagem antiga do Supabase Storage antes de fazer upload da nova
                 if produto.imagem:
-                    old_path = os.path.join(UPLOAD_FOLDER, getattr(produto, 'imagem', ''))
-                    if os.path.exists(old_path):
-                        try:
-                            os.remove(old_path)
-                        except Exception:
-                            pass
-                
+                    delete_file_from_supabase(produto.imagem)
+
                 ext = file.filename.rsplit('.', 1)[1].lower()
                 file.filename = f"{uuid.uuid4().hex[:12]}.{ext}"
-                
+
                 novo_url = upload_file_to_supabase(file, folder='produtos')
                 if novo_url:
                     produto.imagem = novo_url
@@ -185,13 +180,9 @@ def delete_produto(id):
         return jsonify({"message": "Produto não encontrado."}), 404
 
     try:
+        # Remove a imagem do Supabase Storage antes de deletar o produto
         if produto.imagem:
-            old_path = os.path.join(UPLOAD_FOLDER, produto.imagem)
-            if os.path.exists(old_path):
-                try:
-                    os.remove(old_path)
-                except Exception:
-                    pass
+            delete_file_from_supabase(produto.imagem)
 
         db.session.delete(produto)
         db.session.commit()

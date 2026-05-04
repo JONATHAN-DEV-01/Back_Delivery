@@ -220,7 +220,7 @@ def update_restaurante(id):
     if 'capa' in request.files:
         file = request.files['capa']
         if file and allowed_file(file.filename):
-            restaurante.capa = upload_file_to_supabase(file, folder='logos')
+            restaurante.capa = upload_file_to_supabase(file, folder='capas')
 
     try:
         db.session.commit()
