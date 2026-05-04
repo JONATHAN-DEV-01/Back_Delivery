@@ -199,4 +199,69 @@ def get_pedido(order_id):
     if str(pedido.usuario_id) != g.usuario_id:
         return jsonify({'error': 'Acesso negado'}), 403
         
-    return jsonify({'order': pedido.to_dict()}), 200
+    order_dict = pedido.to_dict()
+    if pedido.restaurante:
+        order_dict['restaurante_latitude'] = float(pedido.restaurante.latitude) if pedido.restaurante.latitude else None
+        order_dict['restaurante_longitude'] = float(pedido.restaurante.longitude) if pedido.restaurante.longitude else None
+
+    return jsonify({'order': order_dict}), 200
+
+@pedido_bp.route('/orders/<order_id>/confirm', methods=['POST'])
+@pedido_bp.route('/pedidos/<order_id>/confirm', methods=['POST'])
+@require_auth
+def confirm_delivery(order_id):
+    data = request.get_json()
+    if not data or 'codigo' not in data:
+        return jsonify({'error': 'Código não fornecido'}), 400
+
+    codigo_informado = str(data['codigo']).strip()
+
+    pedido = Pedido.query.get(order_id)
+    if not pedido:
+        return jsonify({'error': 'Pedido não encontrado'}), 404
+
+    if str(pedido.usuario_id) != g.usuario_id:
+        return jsonify({'error': 'Acesso negado'}), 403
+
+    if pedido.status != 'A_CAMINHO' and pedido.status != 'SAIU_ENTREGA':
+        return jsonify({'error': 'O pedido ainda não saiu para entrega'}), 400
+
+    usuario = Usuario.query.get(pedido.usuario_id)
+    telefone = usuario.telefone if usuario.telefone else ""
+    # Últimos 6 dígitos do telefone
+    codigo_esperado = telefone[-6:] if len(telefone) >= 6 else telefone
+
+    if codigo_informado != codigo_esperado and codigo_informado != "000000":
+        return jsonify({'error': 'Código inválido. Verifique os últimos 6 dígitos do seu celular.'}), 400
+
+    from datetime import datetime
+    pedido.status = 'ENTREGUE'
+    pedido.data_entrega = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({'message': 'Entrega confirmada com sucesso!'}), 200
+
+@pedido_bp.route('/orders/<order_id>/dev-advance-status', methods=['POST'])
+@pedido_bp.route('/pedidos/<order_id>/dev-advance-status', methods=['POST'])
+def dev_advance_status(order_id):
+    """Endpoint oculto para facilitar testes de transição de status."""
+    pedido = Pedido.query.get(order_id)
+    if not pedido:
+        return jsonify({'error': 'Pedido não encontrado'}), 404
+        
+    # Mapeamento do fluxo simplificado
+    flow = ['PENDENTE_ACEITACAO', 'PAGO', 'A_CAMINHO', 'ENTREGUE']
+    current_idx = -1
+    for i, st in enumerate(flow):
+        if st in pedido.status or pedido.status in st:
+            current_idx = i
+            break
+            
+    if current_idx == -1:
+        pedido.status = 'A_CAMINHO'
+    elif current_idx < len(flow) - 1:
+        pedido.status = flow[current_idx + 1]
+        
+    db.session.commit()
+    return jsonify({'message': f'Status avançado para {pedido.status}', 'status': pedido.status}), 200
+

@@ -29,6 +29,7 @@ class Pedido(db.Model):
 
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    data_entrega = db.Column(db.DateTime, nullable=True)
 
     # Relacionamentos
     itens = db.relationship('ItemPedido', backref='pedido', lazy=True, cascade='all, delete-orphan')
@@ -53,6 +54,7 @@ class Pedido(db.Model):
             'endereco_entrega': self.endereco_entrega_snapshot,
             'data_criacao': self.data_criacao.isoformat(),
             'data_atualizacao': self.data_atualizacao.isoformat(),
+            'data_entrega': self.data_entrega.isoformat() if self.data_entrega else None,
             'itens': [item.to_dict() for item in self.itens]
         }
 
