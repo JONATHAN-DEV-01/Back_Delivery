@@ -15,6 +15,10 @@ class Pedido(db.Model):
     forma_pagamento = db.Column(db.String(50), nullable=False)
     troco_para_centavos = db.Column(db.Integer, nullable=True)
 
+    # Tipo de entrega: MOTO (padrao), BICICLETA, MOTO_FLASH (expressa, taxa adicional)
+    tipo_entrega = db.Column(db.String(20), nullable=False, default='MOTO')
+    taxa_moto_flash_centavos = db.Column(db.Integer, nullable=False, default=0)
+
     subtotal_centavos = db.Column(db.Integer, nullable=False)
     taxa_entrega_centavos = db.Column(db.Integer, nullable=False, default=0)
     desconto_centavos = db.Column(db.Integer, nullable=False, default=0)
@@ -45,6 +49,8 @@ class Pedido(db.Model):
             'status': self.status,
             'forma_pagamento': self.forma_pagamento,
             'troco_para_centavos': self.troco_para_centavos,
+            'tipo_entrega': self.tipo_entrega,
+            'taxa_moto_flash_centavos': self.taxa_moto_flash_centavos,
             'subtotal_centavos': self.subtotal_centavos,
             'taxa_entrega_centavos': self.taxa_entrega_centavos,
             'desconto_centavos': self.desconto_centavos,

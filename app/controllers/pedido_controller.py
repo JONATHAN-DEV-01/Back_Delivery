@@ -57,8 +57,15 @@ def create_pedido():
     payment_data = data.get('payment', {})
     forma_pagamento = payment_data.get('method', 'UNKNOWN')
     change_for = payment_data.get('change_for')
-    
-    # Conversão segura para centavos se vier float
+
+    # Tipo de entrega
+    TIPOS_ENTREGA_VALIDOS = ('MOTO', 'BICICLETA', 'MOTO_FLASH')
+    TAXA_MOTO_FLASH_CENTAVOS = 500  # R$ 5,00 de taxa adicional expressa
+    tipo_entrega = str(data.get('delivery_type', 'MOTO')).upper()
+    if tipo_entrega not in TIPOS_ENTREGA_VALIDOS:
+        tipo_entrega = 'MOTO'
+
+    # Conversao segura para centavos se vier float
     troco_para_centavos = None
     if change_for:
         troco_para_centavos = int(float(change_for) * 100) if '.' in str(change_for) else int(change_for)
@@ -138,7 +145,11 @@ def create_pedido():
         # 6. Descontos e Taxa de Entrega
         taxa_entrega_centavos = int(float(restaurante.valor_frete) * 100) if restaurante.valor_frete else 0
         desconto_centavos = 0
-        
+
+        # Taxa adicional Moto Flash (entrega expressa)
+        taxa_moto_flash = TAXA_MOTO_FLASH_CENTAVOS if tipo_entrega == 'MOTO_FLASH' else 0
+        taxa_entrega_centavos += taxa_moto_flash
+
         if cupom_codigo:
             cupom = Cupom.query.filter_by(codigo=cupom_codigo.strip().upper()).first()
             if cupom and cupom.is_valido():
@@ -156,6 +167,8 @@ def create_pedido():
             status='PENDENTE_ACEITACAO',  # RN-05
             forma_pagamento=forma_pagamento,
             troco_para_centavos=troco_para_centavos,
+            tipo_entrega=tipo_entrega,
+            taxa_moto_flash_centavos=taxa_moto_flash,
             subtotal_centavos=subtotal_calculado_centavos,
             taxa_entrega_centavos=taxa_entrega_centavos,
             desconto_centavos=desconto_centavos,
