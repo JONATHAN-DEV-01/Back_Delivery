@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from flask import Blueprint, request, jsonify, g
 from app.extensions import db
 from app.models.pedido import Pedido, ItemPedido
@@ -196,10 +197,62 @@ def create_pedido():
             novo_pedido.status = 'PAGO'
             db.session.commit()
             try:
-                from app.models.restaurante import Restaurante as Rest
-                rest_obj = Rest.query.get(novo_pedido.restaurante_id)
-                from app.controllers.Intergração_Pagamento import _enviar_nota_fiscal
-                _enviar_nota_fiscal(novo_pedido, usuario, rest_obj)
+                itens_nf = []
+                for ip in novo_pedido.itens:
+                    adicionais_nf = [
+                        {'nome': a.get('nome', ''), 'preco_centavos': a.get('preco_unitario_centavos', 0)}
+                        for a in (ip.adicionais or [])
+                    ]
+                    itens_nf.append({
+                        'nome': ip.nome_produto,
+                        'quantidade': ip.quantidade,
+                        'preco_unitario_centavos': ip.preco_unitario_base_centavos,
+                        'adicionais': adicionais_nf
+                    })
+
+                end_snap = novo_pedido.endereco_entrega_snapshot or {}
+                dados_nf = {
+                    'numero_pedido': str(novo_pedido.id),
+                    'data_emissao': datetime.utcnow(),
+                    'forma_pagamento': novo_pedido.forma_pagamento,
+                    'tipo_entrega': novo_pedido.tipo_entrega,
+                    'status_pagamento': 'approved',
+                    'cliente': {
+                        'nome': usuario.nome or '',
+                        'sobrenome': usuario.sobrenome or '',
+                        'cpf': usuario.cpf or '',
+                        'email': usuario.email or ''
+                    },
+                    'endereco_entrega': {
+                        'logradouro': end_snap.get('logradouro', ''),
+                        'numero': end_snap.get('numero', ''),
+                        'bairro': end_snap.get('bairro', ''),
+                        'cidade': end_snap.get('cidade', ''),
+                        'estado': end_snap.get('estado', ''),
+                        'complemento': end_snap.get('complemento', '')
+                    },
+                    'restaurante': {
+                        'nome_fantasia': restaurante.nome_fantasia or '',
+                        'razao_social': restaurante.razao_social or '',
+                        'cnpj': restaurante.cnpj or '',
+                        'logradouro': restaurante.logradouro or '',
+                        'numero': restaurante.numero or '',
+                        'bairro': restaurante.bairro or '',
+                        'cidade': restaurante.cidade or '',
+                        'estado': restaurante.estado or '',
+                        'cep': restaurante.cep or '',
+                        'telefone': restaurante.telefone or '',
+                        'email': restaurante.email or ''
+                    },
+                    'itens': itens_nf,
+                    'subtotal_centavos': novo_pedido.subtotal_centavos,
+                    'taxa_entrega_centavos': novo_pedido.taxa_entrega_centavos,
+                    'taxa_moto_flash_centavos': getattr(novo_pedido, 'taxa_moto_flash_centavos', 0),
+                    'desconto_centavos': novo_pedido.desconto_centavos,
+                    'total_centavos': novo_pedido.total_centavos
+                }
+                EmailService.send_nota_fiscal(usuario.email, dados_nf)
+                print(f"[PEDIDO] Nota fiscal enviada para {usuario.email} (CASH/CARD_MACHINE)")
             except Exception as nf_err:
                 print(f"[PEDIDO] Erro ao enviar nota fiscal (CASH/CARD_MACHINE): {nf_err}")
 
