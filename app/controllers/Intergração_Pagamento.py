@@ -11,6 +11,7 @@ from app.models.usuario import Usuario
 from app.models.pagamento import Pagamento
 from app.models.cartoes_clientes import CartaoCliente
 from app.utils.auth_utils import require_auth
+from app.services.email_service import EmailService
 
 pagamento_bp = Blueprint('pagamento', __name__)
 
@@ -23,6 +24,76 @@ def get_mp_headers():
         "Content-Type": "application/json",
         "X-Idempotency-Key": str(uuid.uuid4())
     }
+
+
+def _montar_dados_nota(pedido: Pedido, usuario: Usuario, restaurante: Restaurante) -> dict:
+    """Monta o dicionário de dados para a nota fiscal a partir dos objetos do banco."""
+    endereco = pedido.endereco_entrega_snapshot or {}
+    itens_nf = []
+    for item in pedido.itens:
+        itens_nf.append({
+            "nome": item.nome_produto,
+            "quantidade": item.quantidade,
+            "preco_unitario_centavos": item.preco_unitario_base_centavos,
+            "adicionais": [
+                {
+                    "nome": ad.get("nome", ""),
+                    "preco_unitario_centavos": ad.get("preco_unitario_centavos", 0)
+                }
+                for ad in (item.adicionais or [])
+            ]
+        })
+
+    return {
+        "numero_pedido": str(pedido.id),
+        "data_emissao": datetime.utcnow(),
+        "forma_pagamento": pedido.forma_pagamento,
+        "tipo_entrega": getattr(pedido, "tipo_entrega", "MOTO"),
+        "status_pagamento": "APROVADO",
+        "cliente": {
+            "nome": usuario.nome or "",
+            "sobrenome": usuario.sobrenome or "",
+            "cpf": usuario.cpf or "",
+            "email": usuario.email or ""
+        },
+        "endereco_entrega": {
+            "logradouro": endereco.get("logradouro", ""),
+            "numero": endereco.get("numero", ""),
+            "bairro": endereco.get("bairro", ""),
+            "cidade": endereco.get("cidade", ""),
+            "estado": endereco.get("estado", ""),
+            "complemento": endereco.get("complemento", "")
+        },
+        "restaurante": {
+            "nome_fantasia": restaurante.nome_fantasia or "",
+            "razao_social": restaurante.razao_social or "",
+            "cnpj": restaurante.cnpj or "",
+            "logradouro": restaurante.logradouro or "",
+            "numero": restaurante.numero or "",
+            "bairro": restaurante.bairro or "",
+            "cidade": restaurante.cidade or "",
+            "estado": restaurante.estado or "",
+            "cep": restaurante.cep or "",
+            "telefone": restaurante.telefone or "",
+            "email": restaurante.email or ""
+        },
+        "itens": itens_nf,
+        "subtotal_centavos": pedido.subtotal_centavos,
+        "taxa_entrega_centavos": pedido.taxa_entrega_centavos,
+        "taxa_moto_flash_centavos": getattr(pedido, "taxa_moto_flash_centavos", 0),
+        "desconto_centavos": pedido.desconto_centavos,
+        "total_centavos": pedido.total_centavos
+    }
+
+
+def _enviar_nota_fiscal(pedido: Pedido, usuario: Usuario, restaurante: Restaurante):
+    """Envia a nota fiscal por email. Erros são capturados sem interromper o fluxo."""
+    try:
+        dados = _montar_dados_nota(pedido, usuario, restaurante)
+        EmailService.send_nota_fiscal(usuario.email, dados)
+    except Exception as e:
+        print(f"[NOTA FISCAL] Erro ao enviar para {getattr(usuario, 'email', '?')}: {e}")
+
 
 @pagamento_bp.route('/pagamentos/cartao', methods=['POST'])
 @require_auth
@@ -51,12 +122,10 @@ def pagar_cartao():
     if not pedido:
         return jsonify({'error': 'Pedido não encontrado'}), 404
 
-    # RN: Verificar se o restaurante está aberto
     restaurante = Restaurante.query.get(pedido.restaurante_id)
     if not restaurante.is_open_agora:
         return jsonify({'error': 'O restaurante está fechado no momento.'}), 400
 
-    # RN: Verificar alteração de preço
     if expected_price is not None and int(expected_price) != pedido.total_centavos:
         return jsonify({'error': 'Ocorreu uma alteração no preço do pedido. Por favor, revise seu carrinho.'}), 400
 
@@ -64,7 +133,6 @@ def pagar_cartao():
     email = payer.get('email')
     customer_id = None
 
-    # Implementar tokenização e criação de Customer para armazenamento seguro
     if save_card or data.get('mp_card_id'):
         res_cust = requests.get(f"{MP_URL}/customers/search?email={email}", headers=get_mp_headers())
         cust_results = res_cust.json().get('results', [])
@@ -77,13 +145,11 @@ def pagar_cartao():
                 customer_id = res_create.json().get('id')
 
         if save_card and customer_id and not data.get('mp_card_id'):
-            # Salvar o cartão vinculando o token ao customer
             res_card = requests.post(f"{MP_URL}/customers/{customer_id}/cards", json={"token": token}, headers=get_mp_headers())
             if res_card.status_code in [200, 201]:
                 card_data = res_card.json()
                 mp_card_id = card_data.get('id')
                 
-                # Armazenar no banco de dados local
                 existe = CartaoCliente.query.filter_by(mp_card_id=mp_card_id).first()
                 if not existe:
                     novo_cartao = CartaoCliente(
@@ -96,10 +162,8 @@ def pagar_cartao():
                     db.session.add(novo_cartao)
                     db.session.commit()
 
-    # Conversão de centavos para decimal exigida pela API
     transaction_amount = float(pedido.total_centavos) / 100.0
 
-    # Map frontend payment method ids to Mercado Pago official IDs
     pm_id = payment_method_id.lower().strip()
     if pm_id == 'mastercard':
         pm_id = 'master'
@@ -147,6 +211,10 @@ def pagar_cartao():
 
     db.session.commit()
 
+    # Envia nota fiscal se pagamento aprovado
+    if status == 'approved':
+        _enviar_nota_fiscal(pedido, usuario, restaurante)
+
     return jsonify({
         'message': 'Pagamento processado com sucesso',
         'status': status,
@@ -173,28 +241,23 @@ def pagar_pix():
     if not pedido:
         return jsonify({'error': 'Pedido não encontrado'}), 404
 
-    # RN: Verificar se o restaurante está aberto
     restaurante = Restaurante.query.get(pedido.restaurante_id)
     if not restaurante.is_open_agora:
         return jsonify({'error': 'O restaurante está fechado no momento.'}), 400
 
-    # RN: Verificar alteração de preço
     if expected_price is not None and int(expected_price) != pedido.total_centavos:
         return jsonify({'error': 'Ocorreu uma alteração no preço do pedido. Por favor, revise seu carrinho.'}), 400
 
     usuario = Usuario.query.get(g.usuario_id)
     transaction_amount = float(pedido.total_centavos) / 100.0
 
-    # CPF vem do payload (modal frontend) ou fallback do cadastro do usuário
     cpf_payer = payer.get('identification', {}).get('number', '')
     if not cpf_payer:
         cpf_payer = getattr(usuario, 'cpf', None) or ''
     cpf_payer = cpf_payer.replace('.', '').replace('-', '').strip()
 
-    # Email real do usuário cadastrado
     email_payer = payer.get('email') or usuario.email or 'pagador@zuppseats.com'
 
-    # MP exige formato: yyyy-MM-dd'T'HH:mm:ss.SSS-HH:mm (com milissegundos e offset)
     expiracao = (
         datetime.now(pytz.timezone('America/Sao_Paulo')) + timedelta(minutes=30)
     ).strftime('%Y-%m-%dT%H:%M:%S.000-03:00')
@@ -244,6 +307,10 @@ def pagar_pix():
 
     db.session.commit()
 
+    # PIX aprovado instantaneamente (raro, mas possível em sandbox)
+    if status == 'approved':
+        _enviar_nota_fiscal(pedido, usuario, restaurante)
+
     return jsonify({
         'message': 'Pix gerado com sucesso',
         'status': status,
@@ -256,7 +323,6 @@ def pagar_pix():
 
 @pagamento_bp.route('/webhooks/mercado-pago', methods=['POST'])
 def webhook_mp():
-    # Mercado Pago envia o ID do pagamento de diferentes formas (action e data.id no query params ou JSON)
     data_id = request.args.get('data.id')
     if not data_id:
         json_data = request.get_json() or {}
@@ -265,7 +331,6 @@ def webhook_mp():
     if not data_id:
         return jsonify({'status': 'ignored'}), 200
 
-    # Busca status atualizado do pagamento na API
     res = requests.get(f"{MP_URL}/payments/{data_id}", headers=get_mp_headers())
     if res.status_code == 200:
         pay_data = res.json()
@@ -273,19 +338,28 @@ def webhook_mp():
         
         pagamento = Pagamento.query.filter_by(mercado_pago_id=int(data_id)).first()
         if pagamento:
-            # Mapear e atualizar os status oficiais (approved, rejected, in_process, cancelled)
             pagamento.status = mp_status
             
             pedido = Pedido.query.get(pagamento.pedido_id)
             if pedido:
+                foi_aprovado_agora = (pedido.status != 'PAGO' and mp_status == 'approved')
+
                 if mp_status == 'approved':
                     pedido.status = 'PAGO'
                 elif mp_status in ['rejected', 'cancelled']:
                     pedido.status = 'PAGAMENTO_REJEITADO'
             
             db.session.commit()
-            # Lógica de WebSockets pode ser disparada aqui via evento (ex: Socket.IO)
-            # socketio.emit('payment_status_update', {'pedido_id': str(pedido.id), 'status': mp_status}, room=str(pedido.usuario_id))
+
+            # Envia nota fiscal quando o webhook confirma aprovação do PIX
+            if pedido and foi_aprovado_agora:
+                try:
+                    usuario = Usuario.query.get(pedido.usuario_id)
+                    restaurante = Restaurante.query.get(pedido.restaurante_id)
+                    if usuario and restaurante:
+                        _enviar_nota_fiscal(pedido, usuario, restaurante)
+                except Exception as e:
+                    print(f"[WEBHOOK] Erro ao enviar nota fiscal: {e}")
 
     return jsonify({'status': 'ok'}), 200
 
@@ -299,7 +373,6 @@ def listar_cartoes():
 @pagamento_bp.route('/pagamentos/<pedido_id>/status', methods=['GET'])
 @require_auth
 def status_pagamento(pedido_id):
-    # Endpoint para suportar polling do frontend para atualização do status (especialmente Pix)
     pedido = Pedido.query.get(pedido_id)
     if not pedido:
         return jsonify({'error': 'Pedido não encontrado'}), 404
@@ -321,4 +394,3 @@ def status_pagamento(pedido_id):
 
 
     # Endpoint para testes de integração ao mercado pago devem ser colocados aqui ao final das rotas oficiais.
-    

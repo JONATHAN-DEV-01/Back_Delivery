@@ -8,6 +8,7 @@ from app.models.adicional import Adicional
 from app.models.cupom import Cupom
 from app.models.usuario import Usuario
 from app.utils.auth_utils import require_auth
+from app.services.email_service import EmailService
 from decimal import Decimal
 
 pedido_bp = Blueprint('pedido', __name__)
@@ -188,7 +189,20 @@ def create_pedido():
             
         # Confirmar transação
         db.session.commit()
-        
+
+        # Para pagamentos presenciais (Dinheiro/Maquininha), o pedido é considerado PAGO
+        # imediatamente, pois o pagamento ocorre na entrega sem gateway online.
+        if forma_pagamento in ('CASH', 'CARD_MACHINE'):
+            novo_pedido.status = 'PAGO'
+            db.session.commit()
+            try:
+                from app.models.restaurante import Restaurante as Rest
+                rest_obj = Rest.query.get(novo_pedido.restaurante_id)
+                from app.controllers.Intergração_Pagamento import _enviar_nota_fiscal
+                _enviar_nota_fiscal(novo_pedido, usuario, rest_obj)
+            except Exception as nf_err:
+                print(f"[PEDIDO] Erro ao enviar nota fiscal (CASH/CARD_MACHINE): {nf_err}")
+
         return jsonify({
             'message': 'Pedido realizado com sucesso!',
             'order_id': str(novo_pedido.id),
