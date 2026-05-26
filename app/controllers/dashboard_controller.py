@@ -331,3 +331,124 @@ def ultimas_transacoes():
         }
         for p in pedidos
     ]), 200
+
+
+@dashboard_bp.route('/dashboard/regioes', methods=['GET'])
+@require_restaurante_auth
+def regioes():
+    """
+    Agrega pedidos por bairro a partir do endereco_entrega_snapshot.
+    Retorna top 10 regiões por receita.
+    """
+    periodo = request.args.get('periodo', '30')
+    restaurante_id = request.args.get('restaurante_id', 'all')
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+
+    now = datetime.utcnow()
+    if data_inicio_str and data_fim_str:
+        try:
+            data_inicio = datetime.fromisoformat(data_inicio_str)
+            data_fim = datetime.fromisoformat(data_fim_str) + timedelta(days=1)
+        except ValueError:
+            data_inicio = now - timedelta(days=30)
+            data_fim = now
+    else:
+        dias = int(periodo) if periodo.isdigit() else 30
+        data_inicio = now - timedelta(days=dias)
+        data_fim = now
+
+    STATUS_VALIDOS = ['PAGO', 'ENTREGUE', 'A_CAMINHO', 'SAIU_ENTREGA']
+    query = Pedido.query.filter(
+        Pedido.status.in_(STATUS_VALIDOS),
+        Pedido.data_criacao >= data_inicio,
+        Pedido.data_criacao <= data_fim
+    )
+    if restaurante_id != 'all':
+        query = query.filter(Pedido.restaurante_id == restaurante_id)
+
+    pedidos = query.all()
+
+    from collections import defaultdict
+    regioes_map = defaultdict(lambda: {'pedidos': 0, 'receita': 0.0, 'cidade': ''})
+
+    for p in pedidos:
+        snap = p.endereco_entrega_snapshot or {}
+        bairro = snap.get('bairro') or 'Não informado'
+        cidade = snap.get('cidade') or ''
+        regioes_map[bairro]['pedidos'] += 1
+        regioes_map[bairro]['receita'] += p.total_centavos / 100.0
+        if not regioes_map[bairro]['cidade']:
+            regioes_map[bairro]['cidade'] = cidade
+
+    resultado = sorted(
+        [
+            {
+                'bairro': bairro,
+                'cidade': dados['cidade'],
+                'pedidos': dados['pedidos'],
+                'receita': round(dados['receita'], 2),
+            }
+            for bairro, dados in regioes_map.items()
+        ],
+        key=lambda x: x['receita'],
+        reverse=True
+    )[:10]
+
+    return jsonify(resultado), 200
+
+
+@dashboard_bp.route('/dashboard/heatmap', methods=['GET'])
+@require_restaurante_auth
+def heatmap():
+    """
+    Retorna matriz dia_semana x hora para o mapa de calor.
+    Formato: { "Dom": [c0, c1, ..., c23], "Seg": [...], ... }
+    """
+    periodo = request.args.get('periodo', '30')
+    restaurante_id = request.args.get('restaurante_id', 'all')
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+
+    now = datetime.utcnow()
+    if data_inicio_str and data_fim_str:
+        try:
+            data_inicio = datetime.fromisoformat(data_inicio_str)
+            data_fim = datetime.fromisoformat(data_fim_str) + timedelta(days=1)
+        except ValueError:
+            data_inicio = now - timedelta(days=30)
+            data_fim = now
+    else:
+        dias = int(periodo) if periodo.isdigit() else 30
+        data_inicio = now - timedelta(days=dias)
+        data_fim = now
+
+    STATUS_VALIDOS = ['PAGO', 'ENTREGUE', 'A_CAMINHO', 'SAIU_ENTREGA']
+    query = Pedido.query.filter(
+        Pedido.status.in_(STATUS_VALIDOS),
+        Pedido.data_criacao >= data_inicio,
+        Pedido.data_criacao <= data_fim
+    )
+    if restaurante_id != 'all':
+        query = query.filter(Pedido.restaurante_id == restaurante_id)
+
+    pedidos = query.all()
+
+    # weekday: 0=Mon..6=Sun in Python; we want Dom=0, Seg=1, ..., Sab=6
+    DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    matrix = {d: [0] * 24 for d in DIAS}
+
+    for p in pedidos:
+        # Python weekday: Mon=0 .. Sun=6; convert to Dom=0..Sab=6
+        py_day = p.data_criacao.weekday()  # 0=Mon..6=Sun
+        dia_idx = (py_day + 1) % 7         # Mon->1, ..., Sun->0
+        hora = p.data_criacao.hour
+        matrix[DIAS[dia_idx]][hora] += 1
+
+    # Also return tabela consolidada (hour totals across all days)
+    tabela = []
+    for h in range(24):
+        total = sum(matrix[d][h] for d in DIAS)
+        tabela.append({'horario': f'{str(h).zfill(2)}:00', 'pedidos': total})
+
+    return jsonify({'matrix': matrix, 'tabela': tabela}), 200
