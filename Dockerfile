@@ -2,8 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependências de sistema para o psycopg2
-RUN apt-get update && apt-get install -y libpq-dev gcc postgresql-client
+# Dependências de sistema para psycopg2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -13,10 +15,13 @@ COPY . .
 EXPOSE 5000
 
 ENV FLASK_APP=run.py
-ENV FLASK_ENV=development
+# Produção: não usar modo debug
+ENV FLASK_ENV=production
 
 COPY entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["flask", "run", "--host=0.0.0.0"]
+# Gunicorn: servidor WSGI de produção
+# WEB_CONCURRENCY pode ser sobrescrito via env var no Render (default 2)
+CMD ["sh", "-c", "gunicorn run:app --bind 0.0.0.0:5000 --workers ${WEB_CONCURRENCY:-2} --timeout 120"]
