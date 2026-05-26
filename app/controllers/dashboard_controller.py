@@ -42,7 +42,6 @@ def require_restaurante_auth(f):
 
 
 @dashboard_bp.route('/dashboard/restaurantes', methods=['GET'])
-@require_restaurante_auth
 def listar_restaurantes():
     """Lista todos os restaurantes (para o filtro do dashboard)."""
     restaurantes = Restaurante.query.filter_by(ativo=True).all()
@@ -53,7 +52,6 @@ def listar_restaurantes():
 
 
 @dashboard_bp.route('/dashboard/kpis', methods=['GET'])
-@require_restaurante_auth
 def kpis():
     """
     Retorna KPIs agregados de pedidos para um período.
@@ -122,7 +120,6 @@ def kpis():
 
 
 @dashboard_bp.route('/dashboard/evolucao', methods=['GET'])
-@require_restaurante_auth
 def evolucao_faturamento():
     """
     Retorna evolução diária do faturamento no período.
@@ -174,7 +171,6 @@ def evolucao_faturamento():
 
 
 @dashboard_bp.route('/dashboard/top-produtos', methods=['GET'])
-@require_restaurante_auth
 def top_produtos():
     """
     Retorna top 8 produtos mais vendidos no período.
@@ -228,7 +224,6 @@ def top_produtos():
 
 
 @dashboard_bp.route('/dashboard/horarios', methods=['GET'])
-@require_restaurante_auth
 def horarios_pico():
     """
     Retorna volume de pedidos por hora do dia.
@@ -279,7 +274,6 @@ def horarios_pico():
 
 
 @dashboard_bp.route('/dashboard/ultimas-transacoes', methods=['GET'])
-@require_restaurante_auth
 def ultimas_transacoes():
     """
     Retorna as últimas 10 transações (pedidos) do período.
@@ -334,7 +328,6 @@ def ultimas_transacoes():
 
 
 @dashboard_bp.route('/dashboard/regioes', methods=['GET'])
-@require_restaurante_auth
 def regioes():
     """
     Agrega pedidos por bairro a partir do endereco_entrega_snapshot.
@@ -399,7 +392,6 @@ def regioes():
 
 
 @dashboard_bp.route('/dashboard/heatmap', methods=['GET'])
-@require_restaurante_auth
 def heatmap():
     """
     Retorna matriz dia_semana x hora para o mapa de calor.
