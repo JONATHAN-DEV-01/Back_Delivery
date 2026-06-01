@@ -15,6 +15,9 @@ def require_restaurante_auth(f):
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
+        if request.method == 'OPTIONS':
+            return '', 204
+
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
             return jsonify({'error': 'Token de autenticação não informado.'}), 401
