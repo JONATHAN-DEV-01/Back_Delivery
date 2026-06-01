@@ -132,11 +132,23 @@ def create_pedido():
                         }), 422
 
                     # Verificar se o adicional existe e se pertence ao produto (RN-06)
-                    grupo = adicional_db.grupo if adicional_db else None
-                    if adicional_db and grupo and str(grupo.produto_id) == str(produto.id):
+                    if adicional_db and adicional_db in produto.adicionais:
                         preco_opt_centavos = int(float(adicional_db.preco) * 100)
                         qtd_opt = max(1, int(opt.get('quantity', 1)))
+                        total_opt_solicitado = qtd_opt * quantidade
                         
+                        # Checar se a quantidade de estoque do adicional é suficiente
+                        if float(adicional_db.quantidade_atual) < total_opt_solicitado:
+                            db.session.rollback()
+                            return jsonify({
+                                'error': f'Estoque insuficiente para o adicional "{adicional_db.nome}".',
+                                'adicional_id': str(adicional_db.id),
+                                'code': 'ADICIONAL_ESTOQUE_INSUFICIENTE'
+                            }), 422
+                            
+                        # Deduzir estoque do adicional
+                        adicional_db.quantidade_atual = float(adicional_db.quantidade_atual) - total_opt_solicitado
+
                         opcoes_selecionadas.append({
                             'id': str(adicional_db.id),
                             'nome': adicional_db.nome,

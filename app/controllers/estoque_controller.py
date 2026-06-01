@@ -24,7 +24,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
 from app.models.produto import Produto
-from app.models.adicional import GrupoAdicionais, Adicional
+from app.models.adicional import Adicional
 from app.models.restaurante import Restaurante
 
 estoque_bp = Blueprint('estoque', __name__)
@@ -104,37 +104,19 @@ def listar_estoque_produtos(restaurante_id):
 @require_restaurante_auth
 def listar_estoque_adicionais(restaurante_id):
     """
-    RN-03: Retorna TODOS os adicionais agrupados por GrupoAdicionais,
-    incluindo os esgotados.
+    RN-03: Retorna TODOS os adicionais do restaurante.
     """
     if str(restaurante_id) != g.restaurante_id:
         return jsonify({'error': 'Acesso negado.'}), 403
 
-    # Subquery com todos os produto_ids do restaurante
-    produtos_ids = (
-        db.session.query(Produto.id)
+    adicionais = (
+        Adicional.query
         .filter_by(restaurante_id=restaurante_id)
-        .subquery()
-    )
-
-    grupos = (
-        GrupoAdicionais.query
-        .filter(GrupoAdicionais.produto_id.in_(produtos_ids))
-        .order_by(GrupoAdicionais.nome)
+        .order_by(Adicional.nome)
         .all()
     )
 
-    resultado = [
-        {
-            'grupo_id':   grupo.id,
-            'grupo_nome': grupo.nome,
-            'produto_id': str(grupo.produto_id),
-            'adicionais': [_adicional_estoque_dict(a) for a in grupo.adicionais],
-        }
-        for grupo in grupos
-    ]
-
-    return jsonify(resultado), 200
+    return jsonify([_adicional_estoque_dict(a) for a in adicionais]), 200
 
 
 # ─── PATCH /estoque/produtos/<produto_id>/toggle ─────────────────────────────
@@ -242,51 +224,45 @@ def atualizar_quantidade_produto(produto_id):
         return jsonify({'error': f'Erro no banco de dados: {str(e)}'}), 500
 
 
-# ─── PATCH /estoque/adicionais/<adicional_id>/toggle ─────────────────────────
+# ─── PATCH /estoque/adicionais/<adicional_id>/quantidade ─────────────────────────
 
-@estoque_bp.route('/estoque/adicionais/<int:adicional_id>/toggle', methods=['PATCH'])
+@estoque_bp.route('/estoque/adicionais/<int:adicional_id>/quantidade', methods=['PATCH'])
 @require_restaurante_auth
-def toggle_adicional_disponibilidade(adicional_id):
+def atualizar_quantidade_adicional(adicional_id):
     """
-    RF-03: Esgota/disponibiliza um adicional individualmente sem afetar o produto principal.
-    RN-02: Apenas o dono do restaurante pode alterar.
-    RNF-02: Transação ACID.
-
-    Body JSON:
-    { "disponivel": true | false }
+    Atualiza a quantidade em estoque de um Adicional.
     """
     adicional = Adicional.query.get(adicional_id)
     if not adicional:
         return jsonify({'error': 'Adicional não encontrado.'}), 404
 
-    # Navegar: adicional → grupo → produto → verificar dono
-    grupo = GrupoAdicionais.query.get(adicional.grupo_id)
-    if not grupo:
-        return jsonify({'error': 'Grupo de adicionais não encontrado.'}), 404
-
-    produto = Produto.query.get(grupo.produto_id)
-    if not produto:
-        return jsonify({'error': 'Produto vinculado não encontrado.'}), 404
-
     # RN-02
-    if not _verificar_dono_produto(produto):
+    if str(adicional.restaurante_id) != g.restaurante_id:
         return jsonify({'error': 'Acesso negado. Você não é o dono deste adicional.'}), 403
 
     data = request.get_json()
-    if data is None or 'disponivel' not in data:
-        return jsonify({'error': 'Campo "disponivel" (boolean) é obrigatório no body JSON.'}), 400
-
-    novo_status = bool(data['disponivel'])
+    if data is None:
+        return jsonify({'error': 'Body JSON inválido.'}), 400
 
     try:
-        adicional.disponivel = novo_status
+        if 'quantidade_atual' in data:
+            nova_qtd = float(data['quantidade_atual'])
+        elif 'delta' in data:
+            qtd_atual = float(adicional.quantidade_atual)
+            nova_qtd = max(0.0, qtd_atual + float(data['delta']))
+        else:
+            return jsonify({'error': 'Informe "quantidade_atual" (absoluto) ou "delta" (relativo) no body.'}), 400
+
+        adicional.quantidade_atual = max(0.0, nova_qtd)
         db.session.commit()
 
         return jsonify({
-            'message': f'Adicional "{adicional.nome}" {"disponibilizado" if novo_status else "esgotado"} com sucesso.',
+            'message': 'Quantidade atualizada com sucesso.',
             'adicional': _adicional_estoque_dict(adicional),
         }), 200
 
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Valores numéricos inválidos.'}), 400
     except SQLAlchemyError as e:
         db.session.rollback()
         return jsonify({'error': f'Erro no banco de dados: {str(e)}'}), 500
@@ -316,5 +292,5 @@ def _adicional_estoque_dict(adicional: Adicional) -> dict:
         'preco':             float(adicional.preco),
         'disponivel':        adicional.disponivel,
         'status_disponivel': adicional.disponivel,  # Alias para o frontend
-        'grupo_id':          adicional.grupo_id,
+        'quantidade_atual':  float(adicional.quantidade_atual),
     }

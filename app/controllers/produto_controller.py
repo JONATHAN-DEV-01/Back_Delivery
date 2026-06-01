@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.services.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
 from app.models.produto import Produto
-from app.models.adicional import GrupoAdicionais, Adicional
+from app.models.adicional import Adicional
 from app.models.produto_ingrediente import ProdutoIngrediente
 import json
 
@@ -238,101 +238,36 @@ def delete_produto(id):
         db.session.rollback()
         return jsonify({"message": f"Erro interno ao deletar produto: {str(e)}"}), 500
 
-# 6. GET /produtos/<id>/grupos-adicionais
-@produto_bp.route('/produtos/<uuid:id>/grupos-adicionais', methods=['GET'])
-def get_grupos_adicionais(id):
+# 6. GET /produtos/<id>/adicionais
+@produto_bp.route('/produtos/<uuid:id>/adicionais', methods=['GET'])
+def get_adicionais_produto(id):
     produto = Produto.query.get(id)
     if not produto:
         return jsonify({"message": "Produto não encontrado."}), 404
         
-    grupos = GrupoAdicionais.query.filter_by(produto_id=produto.id).all()
-    return jsonify([g.to_dict() for g in grupos]), 200
+    return jsonify([a.to_dict() for a in produto.adicionais]), 200
 
-# 7. POST /produtos/<id>/grupos-adicionais
-@produto_bp.route('/produtos/<uuid:id>/grupos-adicionais', methods=['POST'])
-def sync_grupos_adicionais(id):
+# 7. POST /produtos/<id>/adicionais
+@produto_bp.route('/produtos/<uuid:id>/adicionais', methods=['POST'])
+def sync_adicionais_produto(id):
     produto = Produto.query.get(id)
     if not produto:
         return jsonify({"message": "Produto não encontrado."}), 404
 
-    # Recebe state completo dos grupos
+    # Recebe array de IDs de adicionais
     data = request.get_json()
     if data is None or not isinstance(data, list):
-        return jsonify({"message": "Esperado um JSON Array com os grupos e adicionais."}), 400
+        return jsonify({"message": "Esperado um JSON Array com os IDs dos adicionais."}), 400
 
     try:
-        # Busca os grupos já existentes para esse produto no DB
-        grupos_existentes = GrupoAdicionais.query.filter_by(produto_id=produto.id).all()
-        grupos_dict = {g.id: g for g in grupos_existentes}
-
-        grupos_recebidos_ids = []
-
-        for grp_data in data:
-            grp_id = grp_data.get('id')
-            
-            # Se já existir o ID, dar Update
-            if grp_id and grp_id in grupos_dict:
-                grupo = grupos_dict[grp_id]
-                grupo.nome = grp_data.get('nome', grupo.nome)
-                grupo.min_selecao = int(grp_data.get('min_selecao', grupo.min_selecao))
-                grupo.max_selecao = int(grp_data.get('max_selecao', grupo.max_selecao))
-                grupo.obrigatorio = bool(grp_data.get('obrigatorio', grupo.obrigatorio))
-                grupos_recebidos_ids.append(grp_id)
-            else:
-                # Insert novo Grupo
-                grupo = GrupoAdicionais(
-                    nome=grp_data.get('nome', 'Sem nome'),
-                    min_selecao=int(grp_data.get('min_selecao', 0)),
-                    max_selecao=int(grp_data.get('max_selecao', 1)),
-                    obrigatorio=bool(grp_data.get('obrigatorio', False)),
-                    produto_id=produto.id
-                )
-                db.session.add(grupo)
-                db.session.flush() # obtemmos novo ID provisório DB sequence
-                grupos_recebidos_ids.append(grupo.id)
-
-            # --- Sincronizar Adicionais aninhados no Grupo ---
-            # Flush() anterior nos garante que var 'grupo.id' agora vale pro relationship
-            adics_existentes = Adicional.query.filter_by(grupo_id=grupo.id).all()
-            adics_dict = {a.id: a for a in adics_existentes}
-            
-            adicionais_recebidos = grp_data.get('adicionais', [])
-            adics_recebidos_ids = []
-            
-            for ad_data in adicionais_recebidos:
-                ad_id = ad_data.get('id')
-                
-                # Update Adicional
-                if ad_id and ad_id in adics_dict:
-                    adic = adics_dict[ad_id]
-                    adic.nome = ad_data.get('nome', adic.nome)
-                    adic.preco = float(ad_data.get('preco', adic.preco))
-                    adic.disponivel = bool(ad_data.get('disponivel', adic.disponivel))
-                    adics_recebidos_ids.append(ad_id)
-                else:
-                    # Insert Adicional
-                    adic = Adicional(
-                        nome=ad_data.get('nome', 'Sem nome'),
-                        preco=float(ad_data.get('preco', 0.0)),
-                        disponivel=bool(ad_data.get('disponivel', True)),
-                        grupo_id=grupo.id
-                    )
-                    db.session.add(adic)
-                    db.session.flush()
-                    adics_recebidos_ids.append(adic.id)
-            
-            # Deleta órfãos Adicionais (aqueles no BD q não vieram na listagem para este grupo)
-            for old_ad_id, old_ad in adics_dict.items():
-                if old_ad_id not in adics_recebidos_ids:
-                    db.session.delete(old_ad)
-
-        # Deleta órfãos Grupos (aqueles no BD q não vieram na listagem raiz)
-        for old_grp_id, old_grp in grupos_dict.items():
-            if old_grp_id not in grupos_recebidos_ids:
-                db.session.delete(old_grp)
-
+        # Busca os adicionais no BD
+        adicionais_db = Adicional.query.filter(Adicional.id.in_(data)).all()
+        
+        # Atualiza a relação
+        produto.adicionais = adicionais_db
         db.session.commit()
-        return jsonify({"message": "Sucesso", "grupos_sincronizados": len(grupos_recebidos_ids)}), 200
+        
+        return jsonify({"message": "Sucesso", "adicionais_sincronizados": len(produto.adicionais)}), 200
 
     except SQLAlchemyError as db_err:
         db.session.rollback()
