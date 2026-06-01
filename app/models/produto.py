@@ -13,6 +13,9 @@ class Produto(db.Model):
     imagem            = db.Column(db.String(255), nullable=True)
     disponivel        = db.Column(db.Boolean, default=True, nullable=False)
 
+    # RF-01: Quantidade numérica em estoque (NULL = sem controle numérico, apenas toggle)
+    quantidade        = db.Column(db.Integer, nullable=True, default=None)
+
     categoria_id   = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=False)
     restaurante_id = db.Column(UUID(as_uuid=True), db.ForeignKey('restaurantes.id'), nullable=False)
 
@@ -28,6 +31,8 @@ class Produto(db.Model):
             'preco':             float(self.preco),
             'imagem':            self.imagem,
             'disponivel':        self.disponivel,
+            'status_disponivel': self.disponivel,   # Alias — compatibilidade com frontend EstoquePage
+            'quantidade':        self.quantidade,   # RF-01: controle numérico opcional
             'categoria_id':      self.categoria_id,
             'categoria':         self.categoria.nome if self.categoria else None,
             'restaurante_id':    str(self.restaurante_id),

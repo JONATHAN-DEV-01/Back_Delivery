@@ -93,7 +93,16 @@ def create_pedido():
             if not produto:
                 db.session.rollback()
                 return jsonify({'error': f'Produto não encontrado: {produto_id}'}), 404
-            
+
+            # RN-01: Checar disponibilidade do produto no momento da confirmação (RNF-02 — dentro da transação)
+            if not produto.disponivel:
+                db.session.rollback()
+                return jsonify({
+                    'error': f'O produto "{produto.nome}" está esgotado e não pode ser pedido.',
+                    'produto_id': str(produto.id),
+                    'code': 'PRODUTO_ESGOTADO'
+                }), 422
+
             # RN-01: Checar se o produto pertence ao restaurante
             if str(produto.restaurante_id) != str(restaurante_id):
                 db.session.rollback()
@@ -112,8 +121,19 @@ def create_pedido():
                 adicional_id = opt.get('option_id')
                 if adicional_id:
                     adicional_db = Adicional.query.get(adicional_id)
+
+                    # RN-01: Checar disponibilidade do adicional (RNF-02 — dentro da transação)
+                    if adicional_db and not adicional_db.disponivel:
+                        db.session.rollback()
+                        return jsonify({
+                            'error': f'O adicional "{adicional_db.nome}" está esgotado e não pode ser adicionado.',
+                            'adicional_id': str(adicional_db.id),
+                            'code': 'ADICIONAL_ESGOTADO'
+                        }), 422
+
                     # Verificar se o adicional existe e se pertence ao produto (RN-06)
-                    if adicional_db and str(adicional_db.produto_id) == str(produto.id):
+                    grupo = adicional_db.grupo if adicional_db else None
+                    if adicional_db and grupo and str(grupo.produto_id) == str(produto.id):
                         preco_opt_centavos = int(float(adicional_db.preco) * 100)
                         qtd_opt = max(1, int(opt.get('quantity', 1)))
                         

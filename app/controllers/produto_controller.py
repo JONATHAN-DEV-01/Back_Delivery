@@ -149,6 +149,19 @@ def update_produto(id):
             disponivel_str = str(data['disponivel']).lower()
             produto.disponivel = disponivel_str in ('true', '1', 'yes')
 
+        # RF-01: Sincronizar campo quantidade se enviado
+        if 'quantidade' in data:
+            try:
+                nova_qtd = max(0, int(data['quantidade']))
+                produto.quantidade = nova_qtd
+                # Sincronizar disponibilidade automaticamente
+                if nova_qtd == 0:
+                    produto.disponivel = False
+                elif nova_qtd > 0 and not produto.disponivel:
+                    produto.disponivel = True
+            except (ValueError, TypeError):
+                pass  # Campo inválido — ignorar silenciosamente
+
         if 'imagem' in request.files:
             file = request.files['imagem']
             if file and allowed_file(file.filename):
