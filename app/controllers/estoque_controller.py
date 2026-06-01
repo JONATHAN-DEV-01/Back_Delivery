@@ -280,6 +280,7 @@ def _produto_estoque_dict(produto: Produto) -> dict:
         'disponivel':        produto.disponivel,
         'status_disponivel': produto.disponivel,   # Alias para o frontend
         'quantidade':        produto.quantidade,
+        'quantidade_disponivel': produto.quantidade_disponivel,
         'restaurante_id':    str(produto.restaurante_id),
     }
 
