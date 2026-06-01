@@ -51,6 +51,7 @@ class Restaurante(db.Model):
     horarios    = db.relationship('HorarioFuncionamento', backref='restaurante', lazy=True, cascade='all, delete-orphan')
     produtos    = db.relationship('Produto', backref='restaurante', lazy=True, cascade='all, delete-orphan')
     otp_codes   = db.relationship('OTPCode', backref='restaurante', lazy=True, cascade='all, delete-orphan')
+    ingredientes = db.relationship('Ingrediente', backref='restaurante', lazy=True, cascade='all, delete-orphan')
 
     # Relacionamento N:N com Categoria via loja_categorias (Req. 7.4)
     categorias = db.relationship('Categoria', secondary=loja_categorias, lazy=True)

@@ -48,6 +48,7 @@ def create_app():
     from app.controllers.Intergração_Pagamento import pagamento_bp
     from app.controllers.dashboard_controller import dashboard_bp
     from app.controllers.estoque_controller import estoque_bp  # Módulo 10 — Gestão de Estoque
+    from app.controllers.ingrediente_controller import ingrediente_bp
 
     app.register_blueprint(users_bp)
     app.register_blueprint(auth_bp)
@@ -61,6 +62,7 @@ def create_app():
     app.register_blueprint(pagamento_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(estoque_bp)   # Módulo 10 — Gestão de Estoque
+    app.register_blueprint(ingrediente_bp)
 
     # ── Modelos (necessário para Alembic/Flask-Migrate detectar) ──────────────
     from app.models import identidade_social  # noqa: F401
@@ -70,6 +72,8 @@ def create_app():
     from app.models import pedido             # noqa: F401
     from app.models import pagamento          # noqa: F401
     from app.models import cartoes_clientes   # noqa: F401
+    from app.models import ingrediente        # noqa: F401
+    from app.models import produto_ingrediente # noqa: F401
 
     # ── Rota de arquivos locais (uploads legados) ─────────────────────────────
     from flask import send_from_directory

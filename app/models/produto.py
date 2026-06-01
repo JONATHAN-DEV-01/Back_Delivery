@@ -21,6 +21,9 @@ class Produto(db.Model):
 
     # Grupos de Adicionais
     grupos_adicionais = db.relationship('GrupoAdicionais', backref='produto', lazy=True, cascade='all, delete-orphan')
+    
+    # Ficha Técnica (Ingredientes)
+    ficha_tecnica = db.relationship('ProdutoIngrediente', backref='produto', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
         em_promocao = bool(self.preco_promocional and float(self.preco_promocional) > 0)
@@ -38,6 +41,7 @@ class Produto(db.Model):
             'restaurante_id':    str(self.restaurante_id),
             'grupos_adicionais': [g.to_dict() for g in self.grupos_adicionais],
             'em_promocao':       em_promocao,
+            'ficha_tecnica':     [f.to_dict() for f in self.ficha_tecnica],
         }
         if em_promocao:
             result['preco_original']    = float(self.preco)

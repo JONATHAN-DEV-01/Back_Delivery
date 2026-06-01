@@ -158,6 +158,21 @@ def create_pedido():
             )
             itens_pedido.append(novo_item)
 
+            # Baixa de Estoque por Ingredientes (Ficha Técnica)
+            for ficha in produto.ficha_tecnica:
+                ingrediente = ficha.ingrediente
+                qtd_necessaria_total = float(ficha.quantidade_necessaria) * quantidade
+                
+                if float(ingrediente.quantidade_atual) < qtd_necessaria_total:
+                    db.session.rollback()
+                    return jsonify({
+                        'error': f'Ingredientes insuficientes para o produto "{produto.nome}". Falta {ingrediente.nome}.',
+                        'code': 'INGREDIENTE_INSUFICIENTE'
+                    }), 422
+                
+                # Deduzir a quantidade
+                ingrediente.quantidade_atual = float(ingrediente.quantidade_atual) - qtd_necessaria_total
+
         # 5. Valor Mínimo do Pedido (RN-03)
         pedido_minimo = restaurante.pedido_minimo_centavos or 0
         if subtotal_calculado_centavos < pedido_minimo:

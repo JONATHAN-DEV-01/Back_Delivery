@@ -7,6 +7,8 @@ from app.extensions import db
 from app.services.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
 from app.models.produto import Produto
 from app.models.adicional import GrupoAdicionais, Adicional
+from app.models.produto_ingrediente import ProdutoIngrediente
+import json
 
 produto_bp = Blueprint('produto', __name__)
 
@@ -101,6 +103,23 @@ def create_produto():
         )
 
         db.session.add(novo_produto)
+        db.session.flush() # Flush to get the ID
+
+        # Tratar Ficha Técnica
+        ficha_tecnica_str = data.get('ficha_tecnica')
+        if ficha_tecnica_str:
+            try:
+                ingredientes = json.loads(ficha_tecnica_str)
+                for item in ingredientes:
+                    pi = ProdutoIngrediente(
+                        produto_id=novo_produto.id,
+                        ingrediente_id=item['ingrediente_id'],
+                        quantidade_necessaria=item['quantidade_necessaria']
+                    )
+                    db.session.add(pi)
+            except Exception as e:
+                pass # Ignora erro de JSON se for malformado
+
         db.session.commit()
     
         return jsonify({"message": "Produto criado com sucesso", "produto": novo_produto.to_dict()}), 201
@@ -165,16 +184,29 @@ def update_produto(id):
         if 'imagem' in request.files:
             file = request.files['imagem']
             if file and allowed_file(file.filename):
-                # Remove a imagem antiga do Supabase Storage antes de fazer upload da nova
                 if produto.imagem:
-                    delete_file_from_supabase(produto.imagem)
-
+                    delete_file_from_supabase(produto.imagem, folder='produtos')
                 ext = file.filename.rsplit('.', 1)[1].lower()
                 file.filename = f"{uuid.uuid4().hex[:12]}.{ext}"
+                produto.imagem = upload_file_to_supabase(file, folder='produtos')
 
-                novo_url = upload_file_to_supabase(file, folder='produtos')
-                if novo_url:
-                    produto.imagem = novo_url
+        # Tratar Ficha Técnica
+        ficha_tecnica_str = data.get('ficha_tecnica')
+        if ficha_tecnica_str:
+            try:
+                ingredientes = json.loads(ficha_tecnica_str)
+                # Remove ingredientes antigos
+                ProdutoIngrediente.query.filter_by(produto_id=produto.id).delete()
+                # Adiciona novos
+                for item in ingredientes:
+                    pi = ProdutoIngrediente(
+                        produto_id=produto.id,
+                        ingrediente_id=item['ingrediente_id'],
+                        quantidade_necessaria=item['quantidade_necessaria']
+                    )
+                    db.session.add(pi)
+            except Exception as e:
+                pass # Ignora erro de JSON se for malformado
 
         db.session.commit()
         return jsonify({"message": "Produto atualizado com sucesso", "produto": produto.to_dict()}), 200
