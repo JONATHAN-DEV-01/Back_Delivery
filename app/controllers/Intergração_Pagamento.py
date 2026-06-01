@@ -384,6 +384,30 @@ def status_pagamento(pedido_id):
     if not pagamento:
         return jsonify({'status': 'Nenhum pagamento encontrado para este pedido'}), 404
         
+    if pagamento.status in ['pending', 'in_process'] and pagamento.mercado_pago_id:
+        try:
+            res = requests.get(f"{MP_URL}/payments/{pagamento.mercado_pago_id}", headers=get_mp_headers())
+            if res.status_code == 200:
+                pay_data = res.json()
+                mp_status = pay_data.get('status')
+                if mp_status and mp_status != pagamento.status:
+                    pagamento.status = mp_status
+                    foi_aprovado_agora = (pedido.status != 'PAGO' and mp_status == 'approved')
+                    if mp_status == 'approved':
+                        pedido.status = 'PAGO'
+                    elif mp_status in ['rejected', 'cancelled']:
+                        pedido.status = 'PAGAMENTO_REJEITADO'
+                    
+                    db.session.commit()
+                    
+                    if foi_aprovado_agora:
+                        restaurante = Restaurante.query.get(pedido.restaurante_id)
+                        usuario = Usuario.query.get(pedido.usuario_id)
+                        if restaurante and usuario:
+                            _enviar_nota_fiscal(pedido, usuario, restaurante)
+        except Exception as e:
+            print(f"Erro ao verificar MP direto: {e}")
+            
     return jsonify({
         'pedido_id': str(pedido.id),
         'pagamento_id': str(pagamento.id),
